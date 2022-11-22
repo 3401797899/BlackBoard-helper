@@ -3,3 +3,4 @@ lxml
 Django
 djangorestframework
 pycryptodome
+requests_cache

@@ -1,7 +1,4 @@
-import json
-
-from rest_framework.parsers import JSONParser
-
+import datetime
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.get_data import *
 from utils.login import login_by_my
@@ -9,22 +6,12 @@ from utils.mapping import get_mapping, post_mapping
 from utils.response_status import ResponseStatus
 from utils.response import Response
 import os
-import requests
+from utils.http_by_proxies import get_by_proxies, post_by_proxies, cache
 
 
 def verify(session):
-    url = "https://wlkc.ouc.edu.cn/webapps/login/"
-    proxies = {
-        "http": "socks5://127.0.0.1:1080",
-        "https": "socks5://127.0.0.1:1080"
-    }
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        "Cookie": session,
-        "Connection": "close"
-    }
-    new_url = requests.get(url, headers=headers, proxies=proxies, verify=False).url
-    return not new_url == url
+    return 'results' in get_by_proxies('https://wlkc.ouc.edu.cn/learn/api/public/v1/calendars?limit=1', session,
+                                       expire_after=datetime.timedelta(minutes=1)).text
 
 
 class LoginView(APIViewPlus):
@@ -66,10 +53,6 @@ class GetDataView(ViewSetPlus):
         i_id = params.get('id', '')
         url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/launcher?type=Course&id=" + i_id + "&url="
         session = params.get('session', '')
-        if i_id == '1':
-            with open('t.json', 'r', encoding='utf-8') as f:
-                data = json.loads(f.read())
-            return Response(ResponseStatus.OK, data)
         if not verify(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         data = get_class_detail_by_url(url, session)
@@ -81,10 +64,6 @@ class GetDataView(ViewSetPlus):
         course_id = params.get('course_id', '')
         content_id = params.get('content_id', '')
         session = params.get('session', '')
-        if content_id == '1':
-            with open('t.json', 'r', encoding='utf-8') as f:
-                data = json.loads(f.read())
-            return Response(ResponseStatus.OK, data)
         if not verify(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         if course_id == '' or content_id == '':
@@ -97,10 +76,6 @@ class GetDataView(ViewSetPlus):
         params = request.GET
         course_id = params.get('course_id', '')
         session = params.get('session', '')
-        if course_id == '1':
-            with open('t.json', 'r', encoding='utf-8') as f:
-                data = json.loads(f.read())
-            return Response(ResponseStatus.OK, data)
         if not verify(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         if not all([course_id, session]):
@@ -108,101 +83,49 @@ class GetDataView(ViewSetPlus):
         else:
             return Response(ResponseStatus.OK, get_class_score(course_id, session))
 
-    @get_mapping(value="homework_score")
-    def get_homework_score(self, request, *args):
-        params = request.GET
-        course_id = params.get('course_id', '')
-        content_id = params.get('content_id', '')
-        session = params.get('session', '')
-        if not verify(session):
-            return Response(ResponseStatus.VERIFICATION_ERROR)
-        if not all([course_id, content_id, session]):
-            return Response(ResponseStatus.VALIDATION_ERROR)
-        else:
-            return Response(ResponseStatus.OK, get_class_try(course_id, content_id, session))
-
     @get_mapping(value="file_convert")
     def get_file_convert(self, request, *args):
         params = request.GET
         url = params.get('url', '')
-        proxies = {
-            "http": "socks5://127.0.0.1:1080",
-            "https": "socks5://127.0.0.1:1080"
-        }
-        new_url = requests.get(url, proxies=proxies)
+        new_url = get_by_proxies(url, expire_after=datetime.timedelta(days=7))
         new_url = new_url.url
         return Response(ResponseStatus.OK, {"url": new_url, "name": os.path.basename(new_url)})
-
-    @get_mapping(value="calendar")
-    def get_calendar(self, request, *args):
-        params = request.GET
-        session = params.get('session', '')
-        if not verify(session):
-            return Response(ResponseStatus.VERIFICATION_ERROR)
-        start = params.get('start', '')
-        end = params.get('end', '')
-        if not all([session, start, end]):
-            return Response(ResponseStatus.VALIDATION_ERROR)
-        else:
-            return Response(ResponseStatus.OK, get_calendar(start, end, session))
 
     @get_mapping(value="announcements")
     def get_announcements_view(self, request, *args):
         params = request.GET
         session = params.get('session', '')
         course_id = params.get('course_id', '')
-        if course_id == '1':
-            with open('t.json', 'r', encoding='utf-8') as f:
-                data = json.loads(f.read())
-            return Response(ResponseStatus.OK, data)
         if not verify(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         return Response(ResponseStatus.OK, get_announcements(session, course_id))
 
-    @post_mapping(value="homework")
+    @post_mapping(value="homework1")
     def post_homework_view(self, request, *args):
         params = request.data
         session = params.get('session', '')
         course_id = params.get('course_id', '')
-        outcome_id = params.get('outcome_id', '')
-        if outcome_id:
-            outcome_definition_id = params.get('outcome_definition_id', '')
-            url = f"https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?action=showHistory&course_id={course_id}&outcome_definition_id={outcome_definition_id}&outcome_id={outcome_id}"
-            rep = submit_homework(session, url)
+        content_id = params.get('content_id', '')
+        resubmit = params.get('resubmit', '')
+        if resubmit:
+            url = f"https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?action=newAttempt&course_id={course_id}&content_id={content_id}"
         else:
-            content_id = params.get('content_id', '')
-            resubmit = params.get('resubmit', '')
-            if resubmit:
-                url = f"https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?action=newAttempt&course_id={course_id}&content_id={content_id}"
-            else:
-                url = f"https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?content_id={content_id}&course_id={course_id}&group_id=&mode=view"
-            files = []
-            for each in request.FILES.getlist('files'):
-                files.append((each.file.name, each.name))
-            # print(files)
-            content = params.get('content', '')
-            rep = submit_homework(session, url, files, content, resubmit)
-        if rep == True:
+            url = f"https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?content_id={content_id}&course_id={course_id}&group_id=&mode=view"
+        files = request.FILES.getlist('files')[0].file.name
+        name = params.get('name', '')
+        content = params.get('content', '')
+        rep = submit_homework1(session, url, course_id, content_id, files, content, name)
+        if rep:
             return Response(ResponseStatus.OK, rep)
-        elif rep == False:
-            return Response(ResponseStatus.UNEXPECTED_ERROR)
         else:
-            return Response(ResponseStatus.OK, {'warning': rep})
+            return Response(ResponseStatus.OK, {'warning': '提交失败'})
 
     @get_mapping(value="check_homework")
     def get_check_homework(self, request, *args):
         _id = request.GET.get("id", "")
+        session = request.GET.get("session", "")
         url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{_id}'
-        proxies = {
-            "http": "socks5://127.0.0.1:1080",
-            "https": "socks5://127.0.0.1:1080"
-        }
-        headers = {
-            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-            "Cookie": request.GET.get("session", ""),
-            "Connection": "close"
-        }
-        r = requests.get(url, headers=headers, proxies=proxies)
+        r = get_by_proxies(url, session, expire_after=datetime.timedelta(seconds=0))
         u = r.url
         content_id = re.findall('content_id=(.*?)&', u)
         course_id = re.findall('course_id=(.*?)&', u)
