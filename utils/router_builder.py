@@ -38,11 +38,12 @@ def load_object(package_path: str) -> Tuple[str, object]:
 
 class RouterBuilder:
 
-    def __init__(self):
-        print("========== RouterBuilder: V0.1 ==========")
+    def __init__(self, trailing_slash=True):
+        print("========== RouterBuilder: V0.2 ==========")
         print("Created By ITStudio, All rights reserved")
         print("== Start auto build router")
-        self.router = SimpleRouter()
+        self.router = SimpleRouter(trailing_slash)
+        self.slash = '/' if trailing_slash else ''
         self.url_patterns = []
         self._auto_collect()
         print("== auto build finished")
@@ -72,6 +73,16 @@ class RouterBuilder:
                     clazz = "apps.{}.views.{}".format(app_name, one[0])
                     self._add_clazz(clazz)
 
+    def collect(self, app_name: str, filename: str):
+        """
+        提供一个手动添加文件进行自动构建路由的入口
+        """
+        views_module = __import__("apps.{}.{}".format(app_name, filename), fromlist=(filename,))
+        for one in getmembers(views_module):
+            if isclass(one[1]):
+                clazz = "apps.{}.{}.{}".format(app_name, filename, one[0])
+                self._add_clazz(clazz)
+
     def _add_class(self, view_set: Type[ViewSetPlus]):
         """
         添加一个 View 类到 RouterBuilder 中并生成对应的 URL
@@ -80,6 +91,8 @@ class RouterBuilder:
         """
         if not view_set.base_url_path:
             url_path = str(view_set.__name__).lower()
+        elif view_set.base_url_path == '/':
+            url_path = ''
         else:
             url_path = view_set.base_url_path
         if not view_set.base_url_name:
@@ -92,7 +105,7 @@ class RouterBuilder:
             else:
                 url_pattern = url_path
             self.url_patterns.append(
-                path(r"{}/".format(url_pattern), view_set.as_view({
+                path(r"{}{}".format(url_pattern, self.slash), view_set.as_view({
                     "get": "get",
                     "post": "post",
                     "delete": "delete",

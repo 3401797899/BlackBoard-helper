@@ -1,23 +1,28 @@
-import datetime
+import os
+
+import requests_cache
+
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.get_data import *
+from utils.http_by_proxies import get_by_proxies, custom_key, headers, proxies
 from utils.login import login_by_my
 from utils.mapping import get_mapping, post_mapping
-from utils.response_status import ResponseStatus
 from utils.response import Response
-import os
-from utils.http_by_proxies import get_by_proxies, post_by_proxies, cache
+from utils.response_status import ResponseStatus
+
+status_cache = requests_cache.CachedSession('status_cache', key_fn=custom_key)
 
 
 def verify(session):
     return 'results' in get_by_proxies('https://wlkc.ouc.edu.cn/learn/api/public/v1/calendars?limit=1', session,
-                                       expire_after=datetime.timedelta(minutes=1)).text
+                                       expire_after=datetime.timedelta(minutes=10)).text
 
 
 class LoginView(APIViewPlus):
     url_pattern = 'login'
 
     def post(self, request, *args):
+
         params = request.data
         t = login_by_my(params.get('username', ''), params.get('password', ''))
         if t == 'login failed':
@@ -115,6 +120,7 @@ class GetDataView(ViewSetPlus):
         name = params.get('name', '')
         content = params.get('content', '')
         rep = submit_homework1(session, url, course_id, content_id, files, content, name)
+        status_cache.cache.clear()
         if rep:
             return Response(ResponseStatus.OK, rep)
         else:
@@ -125,7 +131,8 @@ class GetDataView(ViewSetPlus):
         _id = request.GET.get("id", "")
         session = request.GET.get("session", "")
         url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{_id}'
-        r = get_by_proxies(url, session, expire_after=datetime.timedelta(seconds=0))
+        headers.update({'Cookie': session})
+        r = status_cache.get(url, headers=headers, verify=False, expire_after=datetime.timedelta(minutes=10))
         u = r.url
         content_id = re.findall('content_id=(.*?)&', u)
         course_id = re.findall('course_id=(.*?)&', u)

@@ -16,9 +16,11 @@ Including another URLconf
 from django.urls import path, include
 from utils.router_builder import RouterBuilder
 
-router = RouterBuilder()
-
+router = RouterBuilder(trailing_slash=False)
+router1 = RouterBuilder(trailing_slash=True)
 urlpatterns = [
     path("", include(router.urls)),
     path("", include(router.url_patterns)),
+    path("", include(router1.urls)),
+    path("", include(router1.url_patterns)),
 ]

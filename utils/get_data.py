@@ -149,7 +149,7 @@ def get_announcements(cookie: str, course_id: str) -> list:
     data = list()
     for each in ul:
         content_ele = each.find("div[@class='details']/div[@class='vtbegenerated']")
-        if content_ele:
+        if content_ele is not None:
             content = etree.tostring(content_ele,
                                      encoding="utf-8").decode("utf-8").rstrip()
         else:
@@ -214,3 +214,137 @@ def submit_homework1(cookie: str, url: str, course_id, content_id, files: str = 
         return 'destinationUrl' in r.text
     except:
         return False
+
+
+def get_detail_score(course_id: str, cookie: str) -> list:
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'  # 目标网址
+    respnse = requests.get(url, headers=headers)
+    content = respnse.content.decode('utf8')
+    html = etree.HTML(content)
+    # 根据3类不同的情况，获取分数，文件，批注
+    a_id = html.xpath('//div[@id="grades_wrapper"]//div[@class="cell gradable"]/a/@id')
+    data = []
+    inf = {}
+    for i in a_id:  # 一个课程的每一项作业
+        type_ = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/@onclick')
+        web = re.findall(r"[(](.*?)[)]", str(type_))
+        web = "".join(web).strip("'")  # 获取/webapps/...
+        type_ = str(type_)[38:39]  # 获取类型
+
+        if (type_ == 'g'):  # 测验和签到
+            title = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/text()')
+            # print(title)
+            url = 'https://wlkc.ouc.edu.cn' + web
+            content = requests.get(url, headers=headers).text
+            html_g = etree.HTML(content)
+            det = list()  # 列表
+            subtime = html_g.xpath('//table//tr//td[2]/text()')
+            sum = len(subtime)
+            if (sum == 0):
+                times = "无尝试提交"
+                deadline = html_g.xpath('//div//li[3]//div[@class="field"]/text()') + ['null']
+                det.append({"times": times, "submissiontime": "null", "deadline": deadline[0].strip(),
+                            "score": "null", "totalscore": "null", "background": "null"})
+            else:
+                for i in range(1, sum + 1, 1):
+                    times = "第" + str(i) + "次提交"
+                    submissiontime = html_g.xpath('//table//tr[' + str(i + 1) + ']//td[2]/text()') + ['null']
+                    deadline = html_g.xpath('//div//li[3]//div[@class="field"]/text()') + ['null']
+                    score = html_g.xpath('//table//tr[' + str(i + 1) + ']//td//strong/text()') + ['null']
+                    totalscore = html_g.xpath('//div//li[4]//div[@class="field"]/text()') + ['null']
+                    det.append(
+                        {"times": times, "submissiontime": submissiontime[0].strip(), "deadline": deadline[0].strip(),
+                         "score": score[0].strip(), "totalscore": totalscore[0].strip(), "background": "null"})
+
+            inf[title[0]] = det
+            # print(inf)
+
+        elif (type_ == 'b'):  # 互评
+            title = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/text()')
+            homeworkid = re.findall(r"[_](.*?)[_]", i)
+            submissiontime = html.xpath('//*[@id="' + homeworkid[0] + '"]/div[2]/span[1]/text()') + ['null']
+            # print(title)
+            # print(submissiontime)
+            url = 'https://wlkc.ouc.edu.cn' + web
+            content = requests.get(url, headers=headers).text
+            html_b = etree.HTML(content)
+            det = list()  # 列表
+            bg = html_b.xpath('//div//tr//td[2]/text()')  # 反馈
+            sum = len(bg)
+            # print(sum)
+            if (sum == 0):
+                originscore = html_b.xpath('//li[4]//div[@class="field"]/text()') + ['null']
+                # print(originscore)
+                if "null" in originscore[0]:
+                    score = "null"
+                    totalscore = "null"
+                else:
+                    num = originscore[0].index("/")
+                    score = (originscore[0][:num]).strip()
+                    totalscore = (originscore[0][num + 1:]).strip()
+                # print(score)
+                # print(totalscore)
+                det.append({"times": "第1次提交", "submissiontime": submissiontime[0].strip(), "deadline": "null",
+                            "score": score, "totalscore": totalscore, "background": "null"})
+                inf[title[0]] = det
+                # print(inf)
+            else:
+                times = html_b.xpath('//h2[@class="evaluator"]//span/text()')  # 评估者姓名
+                for i in range(1, sum + 1, 1):
+                    originscore = html_b.xpath('//*[@id="containerdiv"]/table[' + str(i) + ']/tbody/tr/td[1]/text()')
+                    num = originscore[0].index("/")
+                    score = (originscore[0][:num]).strip()
+                    totalscore = (originscore[0][num + 1:]).strip()
+                    det.append(
+                        {"times": times[i - 1].strip(), "submissiontime": submissiontime[0].strip(), "deadline": "null",
+                         "score": score, "totalscore": totalscore, "background": bg[i - 1].strip()})
+                inf[title[0]] = det
+            # print(inf)
+
+        elif (type_ == 'a'):  # 正常提交
+            title = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/text()')
+            homeworkid = re.findall(r"[_](.*?)[_]", i)
+            deadline = html.xpath('//*[@id="' + homeworkid[0] + '"]/div[1]/div[1]/text()')
+            # print(title)
+            url = 'https://wlkc.ouc.edu.cn' + web
+            # print(url)
+            content = requests.get(url, headers=headers).text
+            html_a = etree.HTML(content)
+            det = list()  # 列表
+            trytime = html_a.xpath('//span[@class="mainLabel"]/text()')
+            sum = len(trytime)
+            if (sum > 2):  # 多次尝试
+                score = html_a.xpath('//span[@class="pointsGraded"]/text()') + ['null']
+                submissiontime = html_a.xpath('//span[@class="subHeader dateStamp"]/text()') + ['null']
+                totalscore = html_a.xpath('//*[@id="aggregateGrade_pointsPossible"]/text()') + ['null']
+                newweb = html_a.xpath('//div[@id="currentAttempt_attemptList"]//a//@href')
+                for i in range(2, sum, 1):
+                    url = 'https://wlkc.ouc.edu.cn' + newweb[i - 2]
+                    content = requests.get(url, headers=headers).text
+                    html_aa = etree.HTML(content)
+                    # print(url)
+                    background = html_aa.xpath(
+                        '//*[@id="currentAttempt_feedback"]/div/p/span[1]/text()') + html_aa.xpath(
+                        '//*[@id="currentAttempt_feedback"]/div/p/text()') + ['null']
+                    # print(background)
+                    det.append({"times": "第" + str(i - 1) + "次提交", "submissiontime": submissiontime[i - 2].strip(),
+                                "deadline": deadline[0].strip(),
+                                "score": score[i - 2].strip(), "totalscore": totalscore[0][1:].strip(),
+                                "background": background[0].strip()})  # bg读不到
+                inf[title[0]] = det
+            else:  # 一次尝试
+                score = html_a.xpath('//div[@class="grade readOnly"]//input//@value') + ['null']
+                submissiontime = html_a.xpath('//*[@id="currentAttempt_label"]/label/span[2]/text()') + ['null']
+                totalscore = html_a.xpath('//*[@id="aggregateGrade_pointsPossible"]/text()') + ['null']
+                background = html_a.xpath('//*[@id="currentAttempt_feedback"]/div/p/text()') + ['null']
+                det.append(
+                    {"times": "第1次提交", "submissiontime": submissiontime[0].strip(), "deadline": deadline[0].strip(),
+                     "score": score[0].strip(), "totalscore": totalscore[0][1:].strip(),
+                     "background": background[0].strip()})
+                inf[title[0]] = det
+    data.append(inf)
+    return data
