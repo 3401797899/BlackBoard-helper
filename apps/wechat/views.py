@@ -45,3 +45,11 @@ class WechatView(ViewSetPlus):
         user.open_id = open_id
         user.save()
         return Response(ResponseStatus.OK)
+
+    @get_mapping(value="subcount")
+    def add_subcount(self, request, *args, **kwargs):
+        params = request.query_params
+        user = User.objects.get(username=params.get('username', ''))
+        user.subCount += 1
+        user.save()
+        return Response(ResponseStatus.OK)

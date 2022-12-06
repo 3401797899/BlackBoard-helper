@@ -9,6 +9,7 @@ class User(models.Model):
     expire = models.CharField(verbose_name='session过期的时间戳', max_length=50)
     open_id = models.CharField(verbose_name='open_id', max_length=255, null=True)
     status = models.BooleanField(verbose_name='通知是都开启', default=False)
+    subCount = models.IntegerField(verbose_name='订阅次数', default=0)
 
     class Meta:
         verbose_name = '用户'

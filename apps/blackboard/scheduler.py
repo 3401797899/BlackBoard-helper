@@ -102,12 +102,15 @@ def notice_user_homework(homework, access_token):
     r = requests.post(url, data=json.dumps(data)).json()
     if r['errcode'] == 0:
         homework.last_notice_time = time.time()
+        user = homework.user
+        user.subCount -= 1
+        user.save()
         homework.save()
 
 
 @register_job(scheduler, 'interval', hours=1, id='noticeUser', replace_existing=True)
 def notice_user():
-    homeworks = Homework.objects.filter(finished=False, user__status=True).extra(
+    homeworks = Homework.objects.filter(finished=False, user__status=True, user__subCount__gt=0).extra(
         where=[f'cast(`deadline` as DECIMAL) >= {time.time()}']).select_related('user')
     now = time.time()
     for each in homeworks:
