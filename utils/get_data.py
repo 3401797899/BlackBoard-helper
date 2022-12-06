@@ -1,10 +1,24 @@
+import hashlib
 import time
 import requests
+import requests_cache
 from lxml import etree
 from lxml.html.clean import Cleaner
 import re
-from utils.http_by_proxies import get_by_proxies, post_by_proxies, proxies
+from blackboard.models import User
+from requests import PreparedRequest
+
+from utils.http_by_proxies import get_by_proxies, post_by_proxies, proxies, headers
 import datetime
+
+
+def custom_key(request: PreparedRequest, **kwargs) -> str:
+    xh = User.objects.get(session=request.headers.get('Cookie', '')).username
+    return hashlib.md5((request.url + xh).encode(encoding='utf-8')).hexdigest()
+
+
+class_list = requests_cache.CachedSession('cache', allowable_methods=['GET', 'POST'],
+                                          expire_after=datetime.timedelta(days=7))
 
 
 def get_class_list(cookie: str) -> list:
@@ -20,7 +34,8 @@ def get_class_list(cookie: str) -> list:
         'tabId': '_1_1',
         'tab_tab_group_id': '_1_1'
     }
-    r = post_by_proxies(url, cookie, data=data, expire_after=datetime.timedelta(days=7))
+    headers.update({'Cookie': cookie})
+    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, expire_after=datetime.timedelta(days=7))
     e = etree.HTML(r.text)
     li = e.xpath('//li')
     data = []
@@ -44,6 +59,7 @@ def get_class_detail_by_url(url: str, cookie: str) -> list:
     :return: []
     """
     r = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=5))
+    print(r.expires)
     r.encoding = 'utf-8'
     data = []
     e = etree.HTML(r.text)

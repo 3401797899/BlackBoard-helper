@@ -24,6 +24,8 @@ class ResponseStatus(Enum):
 
     VERIFICATION_ERROR = (40003, "session过期了")
 
+    OPENID_ERROR = (40004, "OPENID获取失败")
+
     @property
     def code(self):
         return self.value[0]

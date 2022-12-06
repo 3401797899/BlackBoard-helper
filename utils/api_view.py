@@ -10,6 +10,12 @@ from django.conf import settings
 import traceback
 import re
 
+debug = settings.DEBUG
+try:
+    level = settings.DEBUG_LEVEL
+except:
+    level = 'console'
+
 
 class ViewSetPlus(ViewSet):
     """
@@ -37,9 +43,8 @@ class ViewSetPlus(ViewSet):
         # print(exc)
         # logger.error(exc)
 
-        debug = settings.__dict__.get('DEBUG', False)
         if debug:
-            level = settings.__dict__.get('DEBUG_LEVEL', 'console')
+
             if level == 'console':
                 # 报错定位不准，放弃了
                 # file = exc.__traceback__.tb_frame.f_globals["__file__"]

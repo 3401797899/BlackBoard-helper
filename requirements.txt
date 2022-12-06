@@ -4,3 +4,6 @@ Django
 djangorestframework
 pycryptodome
 requests_cache
+django_apscheduler
+mysqlclient
+pysocks

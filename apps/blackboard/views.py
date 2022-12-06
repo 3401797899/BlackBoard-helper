@@ -1,7 +1,7 @@
 import os
-
+import time
+from blackboard import scheduler
 import requests_cache
-
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.get_data import *
 from utils.http_by_proxies import get_by_proxies, custom_key, headers, proxies
@@ -9,6 +9,8 @@ from utils.login import login_by_my
 from utils.mapping import get_mapping, post_mapping
 from utils.response import Response
 from utils.response_status import ResponseStatus
+import base64
+from blackboard.models import User
 
 status_cache = requests_cache.CachedSession('status_cache', key_fn=custom_key)
 
@@ -22,11 +24,30 @@ class LoginView(APIViewPlus):
     url_pattern = 'login'
 
     def post(self, request, *args):
-
         params = request.data
-        t = login_by_my(params.get('username', ''), params.get('password', ''))
+        username = params.get('username', '')
+        pwd = params.get('password', '')
+        if pwd == '':
+            return Response(ResponseStatus.LOGIN_ERROR)
+        user = User.objects.filter(username=username)
+        exists = user.exists()
+        # 如果用户存在且密码没有修改，从数据库查看session是否过期，未过期返回数据库存的session
+        if exists:
+            user = user.first()
+            if float(user.expire) > time.time():
+                return Response(ResponseStatus.OK, {'session': user.session})
+        password = base64.b64decode(pwd.encode('utf-8')).decode('utf-8')
+        t = login_by_my(username, password)
         if t == 'login failed':
             return Response(ResponseStatus.LOGIN_ERROR)
+        # 其他情况下，保存session
+        if exists:
+            user.session = t
+            user.expire = time.time() + 15 * 60
+            user.save()
+        else:
+            User.objects.create(username=username, session=t, expire=time.time() + 15 * 60,
+                                status=False)
         return Response(ResponseStatus.OK, {"session": t})
 
 
