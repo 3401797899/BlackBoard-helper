@@ -1,47 +1,58 @@
 import os
-import time
-from blackboard import scheduler
-import requests_cache
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.get_data import *
 from utils.http_by_proxies import get_by_proxies, custom_key, headers, proxies
-from utils.login import login_by_my
+from utils.login import login_by_my, login_by_wlkc
 from utils.mapping import get_mapping, post_mapping
 from utils.response import Response
 from utils.response_status import ResponseStatus
 import base64
+from binascii import Error as binasciiError
 from blackboard.models import User
+from utils.login import verify
+from django.conf import settings
+
+# 开启定时任务
+if not settings.DEBUG:
+    from blackboard import scheduler
 
 status_cache = requests_cache.CachedSession('status_cache', key_fn=custom_key)
-
-
-def verify(session):
-    return 'results' in get_by_proxies('https://wlkc.ouc.edu.cn/learn/api/public/v1/calendars?limit=1', session,
-                                       expire_after=datetime.timedelta(minutes=10)).text
 
 
 class LoginView(APIViewPlus):
     url_pattern = 'login'
 
+    @staticmethod
+    def get_user_from_database(username, password):
+        user = User.objects.filter(username=username)
+        if user.exists():
+            user = user.first()
+            if user.password == password and verify(user.session):
+                return Response(ResponseStatus.OK, {'session': user.session})
+            else:
+                return user
+        else:
+            return None
+
     def post(self, request, *args):
         params = request.data
         username = params.get('username', '')
         pwd = params.get('password', '')
-        if pwd == '':
+        if username:
+            user = self.get_user_from_database(username, pwd)
+        else:
             return Response(ResponseStatus.LOGIN_ERROR)
-        user = User.objects.filter(username=username)
-        exists = user.exists()
-        # 如果用户存在且密码没有修改，从数据库查看session是否过期，未过期返回数据库存的session
-        if exists:
-            user = user.first()
-            if float(user.expire) > time.time():
-                return Response(ResponseStatus.OK, {'session': user.session})
-        password = base64.b64decode(pwd.encode('utf-8')).decode('utf-8')
-        t = login_by_my(username, password)
+        if isinstance(user, Response):
+            return user
+        try:
+            password = base64.b64decode(pwd.encode('utf-8')).decode('utf-8')
+        except binasciiError:
+            return Response(ResponseStatus.LOGIN_ERROR)
+        t = login_by_wlkc(username, password)
         if t == 'login failed':
             return Response(ResponseStatus.LOGIN_ERROR)
         # 其他情况下，保存session
-        if exists:
+        if user and isinstance(user, User):
             user.session = t
             user.expire = time.time() + 15 * 60
             user.save()
@@ -113,6 +124,8 @@ class GetDataView(ViewSetPlus):
     def get_file_convert(self, request, *args):
         params = request.GET
         url = params.get('url', '')
+        if url.startswith('https://wlkc.ouc.edu.cnhttp'):
+            return Response(ResponseStatus.OK, {"url": url.replace('https://wlkc.ouc.edu.cn', ''), "name": None})
         new_url = get_by_proxies(url, expire_after=datetime.timedelta(days=7))
         new_url = new_url.url
         return Response(ResponseStatus.OK, {"url": new_url, "name": os.path.basename(new_url)})
@@ -151,6 +164,8 @@ class GetDataView(ViewSetPlus):
     def get_check_homework(self, request, *args):
         _id = request.GET.get("id", "")
         session = request.GET.get("session", "")
+        if not verify(session):
+            return Response(ResponseStatus.VERIFICATION_ERROR)
         url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{_id}'
         headers.update({'Cookie': session})
         r = status_cache.get(url, headers=headers, verify=False, expire_after=datetime.timedelta(minutes=10))
@@ -158,12 +173,16 @@ class GetDataView(ViewSetPlus):
         content_id = re.findall('content_id=(.*?)&', u)
         course_id = re.findall('course_id=(.*?)&', u)
         e = etree.HTML(r.text)
+        if not all([content_id, course_id]):
+            return Response(ResponseStatus.GET_HOMEWORK_STATUS_ERROR)
         data = {
             'finished': False,
             'submit': True,
             'content_id': content_id[0],
             'course_id': course_id[0]
         }
+        if e.xpath("//input[@class='submit button-1' and @name='bottom_开始']"):
+            return Response(ResponseStatus.OK, data)
         if e.xpath("//input[@class='submit button-1' and @name='bottom_提交']"):
             return Response(ResponseStatus.OK, data)
         else:

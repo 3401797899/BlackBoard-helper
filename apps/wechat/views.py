@@ -37,19 +37,41 @@ class WechatView(ViewSetPlus):
         login = login_by_my(username, password)
         if login == 'login failed':
             return Response(ResponseStatus.LOGIN_ERROR)
-        user = User.objects.get(username=username)
-        user.password = pwd
-        user.status = True
-        user.session = login
-        user.expire = time.time() + 15 * 60
-        user.open_id = open_id
-        user.save()
+        user = User.objects.filter(username=username)
+        if user.exists():
+            user = user.first()
+            user.password = pwd
+            user.status = True
+            user.session = login
+            user.expire = time.time() + 15 * 60
+            user.open_id = open_id
+            user.save()
+        else:
+            User.objects.create(username=username, password=pwd, session=login, expire=time.time() + 15 * 60,
+                                open_id=open_id, status=True, subCount=0)
         return Response(ResponseStatus.OK)
 
     @get_mapping(value="subcount")
     def add_subcount(self, request, *args, **kwargs):
         params = request.query_params
-        user = User.objects.get(username=params.get('username', ''))
+        username = params.get('username', '')
+        if not username:
+            return Response(ResponseStatus.UNEXPECTED_ERROR)
+        user = User.objects.filter(username=username)
+        if not user.exists():
+            return Response(ResponseStatus.OPENID_ERROR)
+        user = user.first()
         user.subCount += 1
         user.save()
         return Response(ResponseStatus.OK)
+l
+    @get_mapping(value="getcount")
+    def get_count(self, request, *args, **kwargs):
+        params = request.query_params
+        username = params.get('username', '')
+        if not username:
+            return Response(ResponseStatus.UNEXPECTED_ERROR)
+        user = User.objects.filter(username=username)
+        if not user.exists():
+            return Response(ResponseStatus.OPENID_ERROR)
+        return Response(ResponseStatus.OK, {"count": user.first().subCount})

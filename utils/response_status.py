@@ -26,6 +26,8 @@ class ResponseStatus(Enum):
 
     OPENID_ERROR = (40004, "OPENID获取失败")
 
+    GET_HOMEWORK_STATUS_ERROR = (40005, "获取作业状态失败")
+
     @property
     def code(self):
         return self.value[0]
