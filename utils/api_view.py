@@ -1,20 +1,15 @@
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.viewsets import ViewSet
-
-from utils.response import Response
-from utils.response_status import ResponseStatus
-from utils.exception import ValidationException
+from rest_framework_simplejwt.exceptions import InvalidToken
+from django.core.mail import send_mail
+from .response import Response
+from .response_status import ResponseStatus
+from .exception import ValidationException
 
 from django.conf import settings
 
 import traceback
 import re
-
-debug = settings.DEBUG
-try:
-    level = settings.DEBUG_LEVEL
-except:
-    level = 'console'
 
 
 class ViewSetPlus(ViewSet):
@@ -43,22 +38,61 @@ class ViewSetPlus(ViewSet):
         # print(exc)
         # logger.error(exc)
 
-        if debug:
+        debug = getattr(settings, 'DEBUG', True)
+        debug_level = getattr(settings, 'DEBUG_LEVEL', 'console')
 
-            if level == 'console':
+        if debug:
+            if debug_level == 'console':
                 # 报错定位不准，放弃了
                 # file = exc.__traceback__.tb_frame.f_globals["__file__"]
                 # line = exc.__traceback__.tb_lineno
-                e = "".join(traceback.format_exception(*(type(exc), exc, exc.__traceback__)))
+                e = "".join(traceback.format_exception(
+                    *(type(exc), exc, exc.__traceback__)))
                 pattern = re.compile(r'File \"(.*)\", line (\d+),')
                 exception = re.findall(pattern, e)[-1]
-                # 红色高亮输出
-                print(f'\033[1;31m[Error] {exc} in file {exception[0]} , line {exception[1]}\033[0m')
-            elif level == 'default':
+                print(
+                    f'\033[1;31m[Error] {exc} in file "{exception[0]}" , line {exception[1]}\033[0m')
+            elif debug_level == 'default':
                 # 默认报错
                 traceback.print_exc()
             else:
                 pass
+        admins = getattr(settings, 'ADMINS', '')
+        # if admins:
+        #     import logging
+        #     logger = logging.getLogger('django')
+        #     logger.error(type(exc))
+
+        # admin error email
+        if admins and not getattr(settings, 'DEBUG', True):
+            path = self.request._request.path
+            query_params = self.request.GET.urlencode()
+            data = self.request.data
+            ip = self.request._request.META['REMOTE_ADDR']
+            args = "".join(traceback.format_exception(
+                *(type(exc), exc, exc.__traceback__)))
+            rep = f"""
+            Path: {path}
+            Get: {query_params}
+            data: {data}
+            ip: {ip}
+                        
+            traceback: 
+            {args}
+            """
+            print(rep)
+            send_mail(
+                subject=f'BB小程序Error: {exc}',
+                message=rep,
+                from_email=getattr(settings, 'EMAIL_HOST_USER'),
+                recipient_list=['3401797899@qq.com', ]
+            )
+
+        # if isinstance(exc, InvalidToken):
+        #     return Response(ResponseStatus.TOKEN_ERROR)
+        #
+        # if isinstance(exc, PermissionDenied) and 'CSRF Failed' in exc.detail:
+        #     return Response(ResponseStatus.CSRF_FAILED_ERROR)
 
         if isinstance(exc, MethodNotAllowed):
             return Response(ResponseStatus.METHOD_NOT_ALLOWED_ERROR)

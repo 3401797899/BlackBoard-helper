@@ -13,12 +13,17 @@ import datetime
 
 
 def custom_key(request: PreparedRequest, **kwargs) -> str:
-    xh = User.objects.get(session=request.headers.get('Cookie', '')).username
-    return hashlib.md5((request.url + xh).encode(encoding='utf-8')).hexdigest()
+    user = User.objects.filter(session=request.headers.get('Cookie', ''))
+    if user.exists():
+        print(request.url + user.first().username)
+        return hashlib.md5((request.url + user.first().username).encode(encoding='utf-8')).hexdigest()
+    else:
+        print(request.url + request.headers.get('Cookie', ''))
+        return hashlib.md5((request.url + request.headers.get('Cookie', '')).encode(encoding='utf-8')).hexdigest()
 
 
-class_list = requests_cache.CachedSession('cache', allowable_methods=['GET', 'POST'],
-                                          expire_after=datetime.timedelta(days=7))
+class_list = requests_cache.CachedSession('class_list', allowable_methods=['GET', 'POST'],
+                                          expire_after=datetime.timedelta(days=7), key_fn=custom_key)
 
 
 def get_class_list(cookie: str) -> list:
@@ -35,7 +40,7 @@ def get_class_list(cookie: str) -> list:
         'tab_tab_group_id': '_1_1'
     }
     headers.update({'Cookie': cookie})
-    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, expire_after=datetime.timedelta(days=7))
+    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, verify=False, expire_after=datetime.timedelta(seconds=15))
     e = etree.HTML(r.text)
     li = e.xpath('//li')
     data = []
@@ -135,21 +140,30 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
 
 
 def get_class_score(course_id: str, cookie: str) -> list:
-    url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'  # 目标网址
+    url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'
     t = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=5))
     e = etree.HTML(t.text)
     data = []
     ul = e.xpath("//div[@id='grades_wrapper']/div")
     for li in ul:
-        inf = {'score': li.xpath('.//span[@class="grade"]/text()')[0], 'class_type': li.xpath('./@class')[0][
-                                                                                     18:-13],
-               'lastactivity': li.xpath('./@lastactivity')[0][:-3], 'duedate': li.xpath('./@duedate')[0][:-3]}
-        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row':
-            inf['title'] = li.xpath('./div[@class="cell gradable"]/a/text()')[0].strip()  # 标题
+        inf = {
+            'score': li.findtext("div[@class='cell grade']/span[@class='grade']"),
+            'class_type': li.attrib['class'].replace('sortable_item_row', '').replace('row expanded', '').strip(),
+            'lastactivity': li.attrib['lastactivity'][:-3],
+            'duedate': li.attrib['duedate'][:-3]
+        }
+        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row' or inf[
+            'class_type'] == '':
+            # 可点击的标题
+            title = li.find('./div[@class="cell gradable"]/a')
+            inf['title'] = title.text.strip()
+            inf['column_id'] = title.attrib['id']
+        elif inf['class_type'] == 'calculatedRow' or inf['class_type'] == 'upcoming_item_row':
+            inf['title'] = li.findtext('./div[@class="cell gradable"]/span').strip()
         else:
-            inf['title'] = li.xpath('./div[@class="cell gradable"]/span/text()')[0].strip()
-        totlescore = li.xpath('./div/span[@class="pointsPossible clearfloats"]/text()')
-        inf['totlescore'] = totlescore[0].strip('/') if totlescore != [] else ""  # 有总分返回总分，没有返回空串
+            raise Exception
+        totlescore = li.findtext('./div/span[@class="pointsPossible clearfloats"]')
+        inf['totlescore'] = totlescore.strip('/') if totlescore else ""  # 有总分返回总分，没有返回空串
         data.append(inf)
     return data
 
