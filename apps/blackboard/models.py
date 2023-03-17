@@ -23,8 +23,7 @@ class Homework(models.Model):
     course_name = models.CharField(verbose_name='课程名称', max_length=255)
     deadline = models.CharField(verbose_name='截至时间', max_length=200)
     finished = models.BooleanField(verbose_name='是否完成', default=False)
-    calendar_id = models.CharField(verbose_name='calendar_id', max_length=100, db_index=True, unique=True,
-                                   primary_key=True)
+    calendar_id = models.CharField(verbose_name='calendar_id', max_length=100)
     last_notice_time = models.CharField(verbose_name="上次提醒时间", max_length=255)
     created_time = models.DateTimeField(auto_now_add=True)
 
