@@ -40,7 +40,8 @@ def get_class_list(cookie: str) -> list:
         'tab_tab_group_id': '_1_1'
     }
     headers.update({'Cookie': cookie})
-    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, verify=False, expire_after=datetime.timedelta(seconds=15))
+    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, verify=False,
+                        expire_after=datetime.timedelta(days=7))
     e = etree.HTML(r.text)
     li = e.xpath('//li')
     data = []

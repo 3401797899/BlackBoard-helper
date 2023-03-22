@@ -1,10 +1,8 @@
 import time
-
-from django.shortcuts import render
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.mapping import post_mapping, get_mapping
 import requests
-from utils.login import login_by_my
+from utils.login import login_by_my, login_by_wlkc
 import base64
 from blackboard.models import User
 from utils.response import Response
@@ -34,20 +32,18 @@ class WechatView(ViewSetPlus):
         if open_id is None:
             return Response(ResponseStatus.OPENID_ERROR)
         password = base64.b64decode(pwd.encode('utf-8')).decode('utf-8')
-        login = login_by_my(username, password)
-        if login == 'login failed':
-            return Response(ResponseStatus.LOGIN_ERROR)
         user = User.objects.filter(username=username)
         if user.exists():
             user = user.first()
             user.password = pwd
             user.status = True
-            user.session = login
+            user.session = login_by_wlkc(user.username, pwd)
             user.expire = time.time() + 15 * 60
             user.open_id = open_id
             user.save()
         else:
-            User.objects.create(username=username, password=pwd, session=login, expire=time.time() + 15 * 60,
+            User.objects.create(username=username, password=pwd, session=login_by_wlkc(user.username, pwd),
+                                expire=time.time() + 15 * 60,
                                 open_id=open_id, status=True, subCount=0)
         return Response(ResponseStatus.OK)
 
@@ -64,7 +60,7 @@ class WechatView(ViewSetPlus):
         user.subCount += 1
         user.save()
         return Response(ResponseStatus.OK)
-l
+
     @get_mapping(value="getcount")
     def get_count(self, request, *args, **kwargs):
         params = request.query_params

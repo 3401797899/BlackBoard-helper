@@ -74,12 +74,21 @@ class GetDataView(ViewSetPlus):
         data_list = get_class_list(session)
         data = dict()
         for each in data_list:
-            name = each['name'].split()[-1]
+            name = each['name'].split()
+            if len(name) > 1:
+                name = name[-1]
+            else:
+                if '未指定学期' not in data:
+                    data['未指定学期'] = list()
+                data['未指定学期'].append({
+                    'name': name[-1], 'teacher': each['teacher'], 'id': each['id']
+                })
+                continue
             year = each['name'][:5]
             if year not in data.keys():
                 data[year] = list()
             data[year].append({'name': name, 'teacher': each['teacher'], 'id': each['id']})
-        s = ['C', 'X', 'Q']
+        s = ['C', 'X', 'Q', '期']
         l = sorted(data.items(), key=lambda x: x[0][:4] + str(s.index(x[0][-1])), reverse=True)
         d = {i[0]: i[1] for i in l}
         return Response(ResponseStatus.OK, d)

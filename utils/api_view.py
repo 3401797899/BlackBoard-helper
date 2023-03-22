@@ -1,6 +1,5 @@
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.viewsets import ViewSet
-from rest_framework_simplejwt.exceptions import InvalidToken
 from django.core.mail import send_mail
 from .response import Response
 from .response_status import ResponseStatus
