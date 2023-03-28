@@ -175,28 +175,7 @@ class GetDataView(ViewSetPlus):
         session = request.GET.get("session", "")
         if not verify(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
-        url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{_id}'
-        headers.update({'Cookie': session})
-        r = status_cache.get(url, headers=headers, verify=False, expire_after=datetime.timedelta(minutes=10))
-        u = r.url
-        content_id = re.findall('content_id=(.*?)&', u)
-        course_id = re.findall('course_id=(.*?)&', u)
-        e = etree.HTML(r.text)
-        if not all([content_id, course_id]):
-            return Response(ResponseStatus.GET_HOMEWORK_STATUS_ERROR)
-        data = {
-            'finished': False,
-            'submit': True,
-            'content_id': content_id[0],
-            'course_id': course_id[0]
-        }
-        if e.xpath("//input[@class='submit button-1' and @name='bottom_开始']"):
-            return Response(ResponseStatus.OK, data)
-        if e.xpath("//input[@class='submit button-1' and @name='bottom_提交']"):
-            return Response(ResponseStatus.OK, data)
-        else:
-            if e.xpath("//input[@class='submit button-1' and @name='bottom_开始新的']"):
-                data.update({'finished': True, 'submit': True})
-            else:
-                data.update({'finished': True, 'submit': False})
-            return Response(ResponseStatus.OK, data)
+        status = check_homework(_id, session)
+        if isinstance(status, ResponseStatus):
+            return Response(status)
+        return Response(ResponseStatus.OK, status)

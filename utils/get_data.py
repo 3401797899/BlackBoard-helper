@@ -8,8 +8,11 @@ import re
 from blackboard.models import User
 from requests import PreparedRequest
 
+from blackboard.views import status_cache
 from utils.http_by_proxies import get_by_proxies, post_by_proxies, proxies, headers
 import datetime
+
+from utils.response_status import ResponseStatus
 
 
 def custom_key(request: PreparedRequest, **kwargs) -> str:
@@ -382,3 +385,37 @@ def get_detail_score(course_id: str, cookie: str) -> list:
                 inf[title[0]] = det
     data.append(inf)
     return data
+
+
+def check_homework(calendar_id, session):
+    url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{calendar_id}'
+    headers.update({'Cookie': session})
+    r = status_cache.get(url, headers=headers, verify=False, expire_after=datetime.timedelta(minutes=10))
+    u = r.url
+    content_id = re.findall('content_id=(.*?)&', u)
+    course_id = re.findall('course_id=(.*?)&', u)
+    e = etree.HTML(r.text)
+    if not all([content_id, course_id]):
+        return ResponseStatus.GET_HOMEWORK_STATUS_ERROR
+    data = {
+        'finished': False,
+        'submit': True,
+        'content_id': content_id[0],
+        'course_id': course_id[0]
+    }
+    if des := e.xpath("//div[@class='vtbegenerated']"):
+        description = etree.tostring(des[0], encoding="utf-8").decode("utf-8").strip()
+        cleaner = Cleaner()
+        cleaner.javascript = True
+        data['description'] = cleaner.clean_html(description)
+    if e.xpath("//input[@class='submit button-1' and @name='bottom_开始']"):
+        return data
+    # 处理考试，默认没有完成
+    if e.xpath("//input[@class='submit button-1' and @name='bottom_提交']"):
+        return data
+    else:
+        if e.xpath("//input[@class='submit button-1' and @name='bottom_开始新的']"):
+            data.update({'finished': True, 'submit': True})
+        else:
+            data.update({'finished': True, 'submit': False})
+        return data
