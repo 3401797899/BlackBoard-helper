@@ -67,7 +67,7 @@ class ViewSetPlus(ViewSet):
             path = self.request._request.path
             query_params = self.request.GET.urlencode()
             data = self.request.data
-            ip = self.request._request.META['REMOTE_ADDR']
+            ip = self.request._request.headers.get("X-Real-Ip", None)
             args = "".join(traceback.format_exception(
                 *(type(exc), exc, exc.__traceback__)))
             rep = f"""
