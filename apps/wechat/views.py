@@ -37,12 +37,12 @@ class WechatView(ViewSetPlus):
             user = user.first()
             user.password = pwd
             user.status = True
-            user.session = login_by_wlkc(user.username, pwd)
+            user.session = login_by_wlkc(username, password)
             user.expire = time.time() + 15 * 60
             user.open_id = open_id
             user.save()
         else:
-            User.objects.create(username=username, password=pwd, session=login_by_wlkc(user.username, pwd),
+            User.objects.create(username=username, password=pwd, session=login_by_wlkc(username, password),
                                 expire=time.time() + 15 * 60,
                                 open_id=open_id, status=True, subCount=0)
         return Response(ResponseStatus.OK)

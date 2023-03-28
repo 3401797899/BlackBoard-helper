@@ -96,22 +96,6 @@ def insert_homework_by_user(user):
 
 def notice_user_homework(homework, access_token):
     url = f"https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token={access_token}"
-    # data = {
-    #     "touser": homework.user.open_id,
-    #     "template_id": settings.TEMPLATE_ID,
-    #     "page": "pages/home/home",
-    #     "data": {
-    #         "thing1": {
-    #             "value": homework.name
-    #         },
-    #         "thing6": {
-    #             "value": homework.course_name
-    #         },
-    #         "date3": {
-    #             "value": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(homework.deadline)))
-    #         }
-    #     }
-    # }
     data = {
         "touser": homework.user.open_id,
         "template_id": settings.TEMPLATE_ID,
@@ -120,17 +104,11 @@ def notice_user_homework(homework, access_token):
             "thing1": {
                 "value": homework.name
             },
-            "thing4": {
+            "thing6": {
                 "value": homework.course_name
             },
-            "time2": {
+            "date3": {
                 "value": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(homework.deadline)))
-            },
-            "phrase5": {
-                "value": "未提交"
-            },
-            "thing6": {
-                "value": homework.user.username
             }
         }
     }
