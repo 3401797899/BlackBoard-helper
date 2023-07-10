@@ -7,13 +7,10 @@ from lxml.html.clean import Cleaner
 import re
 from blackboard.models import User
 from requests import PreparedRequest
-
-from blackboard.views import status_cache
+from utils.response_status import ResponseStatus
 from utils.http_by_proxies import get_by_proxies, post_by_proxies, proxies, headers
 import datetime
-
-from utils.response_status import ResponseStatus
-
+from blackboard.views import status_cache
 
 def custom_key(request: PreparedRequest, **kwargs) -> str:
     user = User.objects.filter(session=request.headers.get('Cookie', ''))
@@ -43,8 +40,8 @@ def get_class_list(cookie: str) -> list:
         'tab_tab_group_id': '_1_1'
     }
     headers.update({'Cookie': cookie})
-    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, verify=False,
-                        expire_after=datetime.timedelta(days=7))
+    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, expire_after=datetime.timedelta(days=7),
+                        verify=False)
     e = etree.HTML(r.text)
     li = e.xpath('//li')
     data = []
@@ -156,8 +153,7 @@ def get_class_score(course_id: str, cookie: str) -> list:
             'lastactivity': li.attrib['lastactivity'][:-3],
             'duedate': li.attrib['duedate'][:-3]
         }
-        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row' or inf[
-            'class_type'] == '':
+        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row' or inf['class_type'] == '':
             # 可点击的标题
             title = li.find('./div[@class="cell gradable"]/a')
             try:
@@ -386,7 +382,6 @@ def get_detail_score(course_id: str, cookie: str) -> list:
     data.append(inf)
     return data
 
-
 def check_homework(calendar_id, session):
     url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{calendar_id}'
     headers.update({'Cookie': session})
@@ -419,3 +414,4 @@ def check_homework(calendar_id, session):
         else:
             data.update({'finished': True, 'submit': False})
         return data
+

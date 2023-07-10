@@ -1,65 +1,28 @@
 import os
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.get_data import *
-from utils.http_by_proxies import get_by_proxies, custom_key, headers, proxies
-from utils.login import login_by_my, login_by_wlkc
+from utils.http_by_proxies import get_by_proxies, custom_key
+from utils.login import BBLogin
 from utils.mapping import get_mapping, post_mapping
 from utils.response import Response
 from utils.response_status import ResponseStatus
-import base64
-from binascii import Error as binasciiError
-from blackboard.models import User
-from utils.login import verify
-from django.conf import settings
-
-# 开启定时任务
-if not settings.DEBUG:
-    from blackboard import scheduler
 
 status_cache = requests_cache.CachedSession('status_cache', key_fn=custom_key)
+
+bb_login = BBLogin()
 
 
 class LoginView(APIViewPlus):
     url_pattern = 'login'
 
-    @staticmethod
-    def get_user_from_database(username, password):
-        user = User.objects.filter(username=username)
-        if user.exists():
-            user = user.first()
-            if user.password == password and verify(user.session):
-                return Response(ResponseStatus.OK, {'session': user.session})
-            else:
-                return user
-        else:
-            return None
-
     def post(self, request, *args):
         params = request.data
         username = params.get('username', '')
         pwd = params.get('password', '')
-        if username:
-            user = self.get_user_from_database(username, pwd)
-        else:
-            return Response(ResponseStatus.LOGIN_ERROR)
-        if isinstance(user, Response):
-            return user
-        try:
-            password = base64.b64decode(pwd.encode('utf-8')).decode('utf-8')
-        except binasciiError:
-            return Response(ResponseStatus.LOGIN_ERROR)
-        t = login_by_wlkc(username, password)
-        if t == 'login failed':
-            return Response(ResponseStatus.LOGIN_ERROR)
-        # 其他情况下，保存session
-        if user and isinstance(user, User):
-            user.session = t
-            user.expire = time.time() + 15 * 60
-            user.save()
-        else:
-            User.objects.create(username=username, session=t, expire=time.time() + 15 * 60,
-                                status=False)
-        return Response(ResponseStatus.OK, {"session": t})
+
+        from utils.login import BBHelpLogin
+        bbh_login = BBHelpLogin(username, pwd)
+        return Response(ResponseStatus.OK, {'session': bbh_login.login()})
 
 
 class GetDataView(ViewSetPlus):
@@ -69,7 +32,7 @@ class GetDataView(ViewSetPlus):
     def get_class_list(self, request, *args):
         params = request.GET
         session = params.get('session', '')
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         data_list = get_class_list(session)
         data = dict()
@@ -99,7 +62,7 @@ class GetDataView(ViewSetPlus):
         i_id = params.get('id', '')
         url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/launcher?type=Course&id=" + i_id + "&url="
         session = params.get('session', '')
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         data = get_class_detail_by_url(url, session)
         return Response(ResponseStatus.OK, data)
@@ -110,7 +73,7 @@ class GetDataView(ViewSetPlus):
         course_id = params.get('course_id', '')
         content_id = params.get('content_id', '')
         session = params.get('session', '')
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         if course_id == '' or content_id == '':
             return Response(ResponseStatus.VALIDATION_ERROR)
@@ -122,7 +85,7 @@ class GetDataView(ViewSetPlus):
         params = request.GET
         course_id = params.get('course_id', '')
         session = params.get('session', '')
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         if not all([course_id, session]):
             return Response(ResponseStatus.VALIDATION_ERROR)
@@ -144,7 +107,7 @@ class GetDataView(ViewSetPlus):
         params = request.GET
         session = params.get('session', '')
         course_id = params.get('course_id', '')
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         return Response(ResponseStatus.OK, get_announcements(session, course_id))
 
@@ -173,7 +136,7 @@ class GetDataView(ViewSetPlus):
     def get_check_homework(self, request, *args):
         _id = request.GET.get("id", "")
         session = request.GET.get("session", "")
-        if not verify(session):
+        if bb_login.session_expired(session):
             return Response(ResponseStatus.VERIFICATION_ERROR)
         status = check_homework(_id, session)
         if isinstance(status, ResponseStatus):

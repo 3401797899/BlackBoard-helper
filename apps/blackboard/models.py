@@ -5,6 +5,7 @@ from django.db import models
 class User(models.Model):
     username = models.CharField(verbose_name='学号', max_length=100)
     password = models.CharField(verbose_name='md5加密的密码', max_length=100, null=True)
+    # p_tag = models.BooleanField(verbose_name='密码错误状态', default=False)
     session = models.CharField(verbose_name='最后一次登录的session', max_length=150)
     expire = models.CharField(verbose_name='session过期的时间戳', max_length=50)
     open_id = models.CharField(verbose_name='open_id', max_length=255, null=True)

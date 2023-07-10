@@ -56,36 +56,36 @@ class ViewSetPlus(ViewSet):
                 traceback.print_exc()
             else:
                 pass
-        admins = getattr(settings, 'ADMINS', '')
+        # admins = getattr(settings, 'ADMINS', '')
         # if admins:
         #     import logging
         #     logger = logging.getLogger('django')
         #     logger.error(type(exc))
 
         # admin error email
-        if admins and not getattr(settings, 'DEBUG', True):
-            path = self.request._request.path
-            query_params = self.request.GET.urlencode()
-            data = self.request.data
-            ip = self.request._request.headers.get("X-Real-Ip", None)
-            args = "".join(traceback.format_exception(
-                *(type(exc), exc, exc.__traceback__)))
-            rep = f"""
-            Path: {path}
-            Get: {query_params}
-            data: {data}
-            ip: {ip}
-                        
-            traceback: 
-            {args}
-            """
-            print(rep)
-            send_mail(
-                subject=f'BB小程序Error: {exc}',
-                message=rep,
-                from_email=getattr(settings, 'EMAIL_HOST_USER'),
-                recipient_list=['3401797899@qq.com', ]
-            )
+        # if admins:
+        #     path = self.request._request.path
+        #     query_params = self.request.GET.urlencode()
+        #     data = self.request.data
+        #     ip = self.request._request.headers.get("X-Real-Ip", None)
+        #     args = "".join(traceback.format_exception(
+        #         *(type(exc), exc, exc.__traceback__)))
+        #     rep = f"""
+        #     Path: {path}
+        #     Get: {query_params}
+        #     data: {data}
+        #     ip: {ip}
+        #
+        #     traceback:
+        #     {args}
+        #     """
+        #     print(rep)
+        #     send_mail(
+        #         subject=f'BB小程序Error: {exc}',
+        #         message=rep,
+        #         from_email=getattr(settings, 'EMAIL_HOST_USER'),
+        #         recipient_list=['3401797899@qq.com', ]
+        #     )
 
         # if isinstance(exc, InvalidToken):
         #     return Response(ResponseStatus.TOKEN_ERROR)

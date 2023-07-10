@@ -1,8 +1,10 @@
 import time
+
+from django.shortcuts import render
 from utils.api_view import APIViewPlus, ViewSetPlus
 from utils.mapping import post_mapping, get_mapping
 import requests
-from utils.login import login_by_my, login_by_wlkc
+from utils.login import login_by_my,login_by_wlkc
 import base64
 from blackboard.models import User
 from utils.response import Response
