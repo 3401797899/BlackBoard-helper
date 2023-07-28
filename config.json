@@ -1,0 +1,12 @@
+{
+  "APP_ID": "",
+  "APP_SECRET": "",
+  "TEMPLATE_ID": "",
+  "MYSQL_NAME": "bbhepler",
+  "MYSQL_HOST": "localhost",
+  "MYSQL_USER": "root",
+  "MYSQL_PASS": "123456",
+  "MYSQL_PORT": 3306,
+  "SECRET_KEY": "",
+  "NOTICE_HOMEWORK_DEADLINE": false
+}
