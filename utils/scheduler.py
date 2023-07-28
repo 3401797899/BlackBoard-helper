@@ -121,6 +121,7 @@ class BBHelpNotification:
             course_name = each['calendarName']
             if not flag:
                 first_course = course_name
+                flag = True
             calendar_id = each['id']
             Homework.objects.filter(calendar_id=calendar_id).update(course_name=course_name)
         return first_course
