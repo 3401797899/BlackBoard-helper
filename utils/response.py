@@ -1,7 +1,4 @@
-import json
-
-from django.http import HttpResponse
-
+from rest_framework.response import Response as HttpResponse
 from utils.response_status import ResponseStatus
 
 
@@ -17,6 +14,7 @@ class Response(HttpResponse):
         data = {'key': 'value'}
         return Response(ResponseStatus.OK, data)
     """
+
     def __init__(self, status: ResponseStatus, data=None):
         """
 
@@ -34,9 +32,6 @@ class Response(HttpResponse):
         if status == ResponseStatus.OK and data is not None:
             content['data'] = data
 
-        content = json.dumps(content)
+        # content = json.dumps(content)
 
-        super().__init__(content=content,
-                         content_type='application/json',
-                         status=200,
-                         charset='utf-8')
+        super().__init__(data=content, status=200, content_type='application/json')

@@ -1,14 +1,13 @@
-from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+import traceback
+import re
+
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.viewsets import ViewSet
-from django.core.mail import send_mail
+from django.conf import settings
+
 from .response import Response
 from .response_status import ResponseStatus
 from .exception import ValidationException
-
-from django.conf import settings
-
-import traceback
-import re
 
 
 class ViewSetPlus(ViewSet):
@@ -56,42 +55,6 @@ class ViewSetPlus(ViewSet):
                 traceback.print_exc()
             else:
                 pass
-        # admins = getattr(settings, 'ADMINS', '')
-        # if admins:
-        #     import logging
-        #     logger = logging.getLogger('django')
-        #     logger.error(type(exc))
-
-        # admin error email
-        # if admins:
-        #     path = self.request._request.path
-        #     query_params = self.request.GET.urlencode()
-        #     data = self.request.data
-        #     ip = self.request._request.headers.get("X-Real-Ip", None)
-        #     args = "".join(traceback.format_exception(
-        #         *(type(exc), exc, exc.__traceback__)))
-        #     rep = f"""
-        #     Path: {path}
-        #     Get: {query_params}
-        #     data: {data}
-        #     ip: {ip}
-        #
-        #     traceback:
-        #     {args}
-        #     """
-        #     print(rep)
-        #     send_mail(
-        #         subject=f'BB小程序Error: {exc}',
-        #         message=rep,
-        #         from_email=getattr(settings, 'EMAIL_HOST_USER'),
-        #         recipient_list=['3401797899@qq.com', ]
-        #     )
-
-        # if isinstance(exc, InvalidToken):
-        #     return Response(ResponseStatus.TOKEN_ERROR)
-        #
-        # if isinstance(exc, PermissionDenied) and 'CSRF Failed' in exc.detail:
-        #     return Response(ResponseStatus.CSRF_FAILED_ERROR)
 
         if isinstance(exc, MethodNotAllowed):
             return Response(ResponseStatus.METHOD_NOT_ALLOWED_ERROR)

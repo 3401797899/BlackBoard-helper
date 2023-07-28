@@ -1,36 +1,20 @@
-import hashlib
-import time
+import re
 import requests
-import requests_cache
+import time
+
 from lxml import etree
 from lxml.html.clean import Cleaner
-import re
-from blackboard.models import User
-from requests import PreparedRequest
+
+from BlackBoard.settings import proxies
+from utils.exception import ValidationException
 from utils.response_status import ResponseStatus
-from utils.http_by_proxies import get_by_proxies, post_by_proxies, proxies, headers
-import datetime
-from blackboard.views import status_cache
-
-def custom_key(request: PreparedRequest, **kwargs) -> str:
-    user = User.objects.filter(session=request.headers.get('Cookie', ''))
-    if user.exists():
-        print(request.url + user.first().username)
-        return hashlib.md5((request.url + user.first().username).encode(encoding='utf-8')).hexdigest()
-    else:
-        print(request.url + request.headers.get('Cookie', ''))
-        return hashlib.md5((request.url + request.headers.get('Cookie', '')).encode(encoding='utf-8')).hexdigest()
 
 
-class_list = requests_cache.CachedSession('class_list', allowable_methods=['GET', 'POST'],
-                                          expire_after=datetime.timedelta(days=7), key_fn=custom_key)
-
-
-def get_class_list(cookie: str) -> list:
+def get_class_list(cookie: str) -> dict:
     """
     获取课程列表
     :param cookie: Cookie
-    :return: []
+    :return: {}
     """
     url = 'https://wlkc.ouc.edu.cn/webapps/portal/execute/tabs/tabAction'
     data = {
@@ -39,50 +23,80 @@ def get_class_list(cookie: str) -> list:
         'tabId': '_1_1',
         'tab_tab_group_id': '_1_1'
     }
-    headers.update({'Cookie': cookie})
-    r = class_list.post(url=url, data=data, headers=headers, proxies=proxies, expire_after=datetime.timedelta(days=7),
-                        verify=False)
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    r = requests.post(url=url, data=data, headers=headers, proxies=proxies, verify=False)
     e = etree.HTML(r.text)
-    li = e.xpath('//li')
-    data = []
-    for i in li:
-        name = i.findall('a')[0].text
+    li_s = e.xpath('//li')
+    data_list = []
+    for li in li_s:
+        course_name = li.find('a').text  # 例如：2021Q080502101247-2005177: 计算机科学与技术导论
         teacher = "".join(
-            [j.text.replace('\xa0', '') for j in i.findall('div[@class="courseInformation"]/span[@class="name"]')])
-        i_id = re.findall('id=(_.*?)&', i.findall('a')[0].attrib['href'].replace(' ', ''))
-        if i_id:
-            i_id = i_id[0]
-            data.append({'name': name, 'teacher': teacher,
-                         'id': i_id})
-    return data
+            [_.text.replace('\xa0', '') for _ in li.findall('div[@class="courseInformation"]/span[@class="name"]')])
+        # 忽略自己添加的课程
+        course_id = re.search('id=(_.*?)&', li.find('a').attrib['href'].replace(' ', ''))
+        if course_id:
+            course_id = course_id.group(1)
+            data_list.append({'name': course_name, 'teacher': teacher,
+                              'id': course_id})
+
+    # 按学期分类
+    data = dict()
+    for each in data_list:
+        course_name = each['name'].split()
+        if len(course_name) > 1:
+            # 获取课程名称，删除课程编号
+            course_name = course_name[-1]
+        else:
+            # 处理未开启课程编号的情况，全部放入未指定学期
+            if '未指定学期' not in data:
+                data['未指定学期'] = []
+            data['未指定学期'].append({
+                'name': course_name[-1], 'teacher': each['teacher'], 'id': each['id']
+            })
+            continue
+        year = each['name'][:5]
+        if year not in data.keys():
+            data[year] = []
+        data[year].append({'name': course_name, 'teacher': each['teacher'], 'id': each['id']})
+    s = ['C', 'X', 'Q', '期']  # 期为未指定学期
+    # 将学期排序
+    result = sorted(data.items(), key=lambda x: x[0][:4] + str(s.index(x[0][-1])), reverse=True)
+    return dict(result)
 
 
-def get_class_detail_by_url(url: str, cookie: str) -> list:
+def get_class_detail_by_id(id: str, cookie: str) -> list:
     """
     获取某一课程的列表
     :param url: 课程url
     :param cookie: Cookie
     :return: []
     """
-    r = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=5))
-    print(r.expires)
+    url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/launcher?type=Course&id=" + id + "&url="
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    r = requests.get(url, headers=headers, proxies=proxies, verify=False)
     r.encoding = 'utf-8'
     data = []
     e = etree.HTML(r.text)
-    ul = e.xpath("//ul[@class='courseMenu']/li[not(contains(@class,'divider'))]")
-    for li in ul:
+    li_s = e.xpath("//ul[@class='courseMenu']/li[not(contains(@class,'divider'))]")
+    for li in li_s:
         if 'subhead' in li.attrib['class']:
-            data.append({"name": li.findall('h3')[0].findall('span')[0].text, "type": "subhead"})
+            data.append({"name": li.find('h3/span').text, "type": "subhead"})
             continue
-        a = li.findall('a')[0]
-        text = a.findall('span')[0].text
+        a = li.find('a')
+        text = a.find('span').text
         link = a.attrib['href']
-        content_id = re.findall('content_id=(.*?)&', link)
+        content_id = re.search('content_id=(.*?)&', link)
         if content_id:
-            data.append({"name": text, "type": "content", "id": content_id[0]})
+            data.append({"name": text, "type": "content", "id": content_id.group(1)})
             continue
-        tool_id = re.findall('tool_id=(.*?)&', link)
-        if tool_id and tool_id[0] == "_136_1":
+        tool_id = re.search('tool_id=(.*?)&', link)
+        if tool_id and tool_id.group(1) == "_136_1":
             data.append({"name": text, "type": "announcement"})
     return data
 
@@ -96,25 +110,29 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
     :return: []
     """
     url = f'https://wlkc.ouc.edu.cn/webapps/blackboard/content/listContent.jsp?course_id={course_id}&content_id={content_id}'
-    t = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=5))
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    t = requests.get(url, headers=headers, proxies=proxies, verify=False)
     cleaner = Cleaner()
     cleaner.javascript = True
     html = cleaner.clean_html(t.text)
     e = etree.HTML(html)
     data = []
-    ul = e.xpath("//ul[@class='contentList']/li")
-    for li in ul:
-        name = li.findall('div[@class="item clearfix"]/h3')[0].xpath("string(.)").replace('\n', '').replace(' ', '')
+    li_s = e.xpath("//ul[@class='contentList']/li")
+    for li in li_s:
+        name = li.find('div[@class="item clearfix"]/h3').xpath("string(.)").replace('\n', '').replace(' ', '')
         d = {"name": name, "details": {}}
         _content_id = li.find('div[@class="item clearfix"]/h3/a')
         if _content_id is not None:
             href = _content_id.attrib['href']
-            _content_id = re.findall('content_id=_(.*?_1)', href)
-            if _content_id and _content_id[0] != content_id:
+            _content_id = re.search('content_id=_(.*?_1)', href)
+            if _content_id and _content_id.group(1) != content_id:
                 id_type = "content"
                 if "uploadAssignment" in href:
                     id_type = "homework"
-                d = {"name": name, "id": _content_id[0], "type": id_type, "details": {}}
+                d = {"name": name, "id": _content_id.group(1), "type": id_type, "details": {}}
             else:
                 d['details']['file'] = [
                     {
@@ -122,38 +140,43 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
                         "href": "https://wlkc.ouc.edu.cn" + href
                     }
                 ]
-        t = li.findall('div[@class="details"]')
+        t = li.find('div[@class="details"]')
         if t:
-            text = t[0].findall('div[@class="vtbegenerated"]')
+            text = t.find('div[@class="vtbegenerated"]')
             if text:
-                d['details']['text'] = etree.tostring(text[0], encoding='utf-8').decode('utf-8')
-            file = t[0].findall('div[@class="contextItemDetailsHeaders clearfix"]')
+                d['details']['text'] = etree.tostring(text, encoding='utf-8').decode('utf-8')
+            file = t.find('div[@class="contextItemDetailsHeaders clearfix"]')
             if file:
                 if "file" not in d["details"].keys():
                     d['details']['file'] = list()
-                f = file[0].findall('.//ul[@class="attachments clearfix"]/li')
+                f = file.findall('.//ul[@class="attachments clearfix"]/li')
                 for each in f:
-                    a = each.findall('a')[0]
+                    a = each.find('a')
                     d['details']['file'].append(
-                        {"name": a.xpath('./text()')[0], "href": "https://wlkc.ouc.edu.cn" + a.attrib['href']})
+                        {"name": a.xpath('string(.)'), "href": "https://wlkc.ouc.edu.cn" + a.attrib['href']})
         data.append(d)
     return data
 
 
 def get_class_score(course_id: str, cookie: str) -> list:
     url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'
-    t = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=5))
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    t = requests.get(url, headers=headers, proxies=proxies, verify=False)
     e = etree.HTML(t.text)
     data = []
-    ul = e.xpath("//div[@id='grades_wrapper']/div")
-    for li in ul:
+    li_s = e.xpath("//div[@id='grades_wrapper']/div")
+    for li in li_s:
         inf = {
             'score': li.findtext("div[@class='cell grade']/span[@class='grade']"),
             'class_type': li.attrib['class'].replace('sortable_item_row', '').replace('row expanded', '').strip(),
             'lastactivity': li.attrib['lastactivity'][:-3],
             'duedate': li.attrib['duedate'][:-3]
         }
-        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row' or inf['class_type'] == '':
+        if inf['class_type'] == 'graded_item_row' or inf['class_type'] == 'submitted_item_row' or inf[
+            'class_type'] == '':
             # 可点击的标题
             title = li.find('./div[@class="cell gradable"]/a')
             try:
@@ -173,14 +196,18 @@ def get_class_score(course_id: str, cookie: str) -> list:
 
 def get_announcements(cookie: str, course_id: str) -> list:
     url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/announcement?method=search&viewChoice=2&course_id=" + course_id
-    s = get_by_proxies(url, cookie, expire_after=datetime.timedelta(minutes=10)).text
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    s = requests.get(url, headers=headers, proxies=proxies, verify=False).text
     cleaner = Cleaner()
     cleaner.javascript = True
     html = cleaner.clean_html(s)
     e = etree.HTML(html)
-    ul = e.xpath("//ul[@id='announcementList']/li")
+    li_s = e.xpath("//ul[@id='announcementList']/li")
     data = list()
-    for each in ul:
+    for each in li_s:
         content_ele = each.find("div[@class='details']/div[@class='vtbegenerated']")
         if content_ele is not None:
             content = etree.tostring(content_ele,
@@ -215,7 +242,7 @@ def submit_homework1(cookie: str, url: str, course_id, content_id, files: str = 
             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
             'Cookie': cookie
         }
-        html = requests.get(url, headers=headers, proxies=proxies).text
+        html = requests.get(url, headers=headers, proxies=proxies, verify=False).text
         e = etree.HTML(html)
         nonce = e.xpath("//input[@name='blackboard.platform.security.NonceUtil.nonce']/@value")[0]
         ajaxid = e.xpath("//input[@name='blackboard.platform.security.NonceUtil.nonce.ajax']/@value")[0]
@@ -255,7 +282,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
         'Cookie': cookie
     }
     url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'  # 目标网址
-    respnse = requests.get(url, headers=headers)
+    respnse = requests.get(url, headers=headers, proxies=proxies, verify=False)
     content = respnse.content.decode('utf8')
     html = etree.HTML(content)
     # 根据3类不同的情况，获取分数，文件，批注
@@ -272,7 +299,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             title = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/text()')
             # print(title)
             url = 'https://wlkc.ouc.edu.cn' + web
-            content = requests.get(url, headers=headers).text
+            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
             html_g = etree.HTML(content)
             det = list()  # 列表
             subtime = html_g.xpath('//table//tr//td[2]/text()')
@@ -303,7 +330,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             # print(title)
             # print(submissiontime)
             url = 'https://wlkc.ouc.edu.cn' + web
-            content = requests.get(url, headers=headers).text
+            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
             html_b = etree.HTML(content)
             det = list()  # 列表
             bg = html_b.xpath('//div//tr//td[2]/text()')  # 反馈
@@ -345,7 +372,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             # print(title)
             url = 'https://wlkc.ouc.edu.cn' + web
             # print(url)
-            content = requests.get(url, headers=headers).text
+            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
             html_a = etree.HTML(content)
             det = list()  # 列表
             trytime = html_a.xpath('//span[@class="mainLabel"]/text()')
@@ -357,7 +384,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
                 newweb = html_a.xpath('//div[@id="currentAttempt_attemptList"]//a//@href')
                 for i in range(2, sum, 1):
                     url = 'https://wlkc.ouc.edu.cn' + newweb[i - 2]
-                    content = requests.get(url, headers=headers).text
+                    content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
                     html_aa = etree.HTML(content)
                     # print(url)
                     background = html_aa.xpath(
@@ -382,23 +409,33 @@ def get_detail_score(course_id: str, cookie: str) -> list:
     data.append(inf)
     return data
 
-def check_homework(calendar_id, session):
+
+def check_homework(calendar_id, cookie):
     url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{calendar_id}'
-    headers.update({'Cookie': session})
-    r = status_cache.get(url, headers=headers, verify=False, expire_after=datetime.timedelta(minutes=10))
+    headers = {
+        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
+        'Cookie': cookie
+    }
+    r = requests.get(url, headers=headers, proxies=proxies, verify=False)
     u = r.url
-    content_id = re.findall('content_id=(.*?)&', u)
-    course_id = re.findall('course_id=(.*?)&', u)
+    content_id = re.search('content_id=(.*?)&', u)
+    course_id = re.search('course_id=(.*?)&', u)
     e = etree.HTML(r.text)
     if not all([content_id, course_id]):
-        return ResponseStatus.GET_HOMEWORK_STATUS_ERROR
+        return {
+            'finished': False,
+            'submit': True,
+            'content_id': '-',
+            'course_id': '-'
+        }
     data = {
         'finished': False,
-        'submit': True,
-        'content_id': content_id[0],
-        'course_id': course_id[0]
+        'submit': False,
+        'content_id': content_id.group(1),
+        'course_id': course_id.group(1)
     }
-    if des := e.xpath("//div[@class='vtbegenerated']"):
+    des = e.xpath("//div[@class='vtbegenerated']")
+    if des:
         description = etree.tostring(des[0], encoding="utf-8").decode("utf-8").strip()
         cleaner = Cleaner()
         cleaner.javascript = True
@@ -415,3 +452,25 @@ def check_homework(calendar_id, session):
             data.update({'finished': True, 'submit': False})
         return data
 
+
+class BBGetData:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.39',
+    }
+
+    @staticmethod
+    def get_ics_id(session):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.39',
+            'Cookie': session
+        }
+        url = 'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/url'
+        response = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+        pattern = r'calendarFeed/([^/]+)/learn.ics'
+        match = re.search(pattern, response)
+        if match:
+            ics_id = match.group(1)
+            return ics_id
+        else:
+            # 如果未找到匹配项，返回None
+            return None

@@ -16,11 +16,16 @@ Including another URLconf
 from django.urls import path, include
 from utils.router_builder import RouterBuilder
 
+from BlackBoard.settings import NOTICE_HOMEWORK_DEADLINE
+
+if NOTICE_HOMEWORK_DEADLINE:
+    from utils import scheduler
+
 router = RouterBuilder(trailing_slash=False)
-router1 = RouterBuilder(trailing_slash=True)
+router_slashed = RouterBuilder(trailing_slash=True)
 urlpatterns = [
     path("", include(router.urls)),
     path("", include(router.url_patterns)),
-    path("", include(router1.urls)),
-    path("", include(router1.url_patterns)),
+    path("", include(router_slashed.urls)),
+    path("", include(router_slashed.url_patterns)),
 ]

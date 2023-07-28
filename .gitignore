@@ -1,6 +1,6 @@
+/.idea
 migrations/
 __pycache__/
-db.sqlite3
-/.idea/
+*.sqlite3
 *.sqlite
 config.json

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 import sys
 import os
+import json
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,7 +20,6 @@ sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
-import json
 
 with open(os.path.join(BASE_DIR, 'config.json'), 'r') as f:
     ENV = json.load(f)
@@ -28,23 +28,33 @@ with open(os.path.join(BASE_DIR, 'config.json'), 'r') as f:
 SECRET_KEY = ENV.get('SECRET_KEY', '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 DEBUG_LEVEL = 'default'
 ALLOWED_HOSTS = ['bbh.yangyq.net', '127.0.0.1']
 
+
 # Application definition
 
-INSTALLED_APPS = [
-    # 'django.contrib.admin',
-    # 'django.contrib.auth',
-    # 'django.contrib.contenttypes',
-    # 'django.contrib.sessions',
-    # 'django.contrib.messages',
-    # 'django.contrib.staticfiles',
-    'blackboard',
-    'wechat',
-    'django_apscheduler'
-]
+def _gen_installed_apps():
+    yield 'blackboard'
+    yield 'wechat'
+    if ENV.get('NOTICE_HOMEWORK_DEADLINE', False):
+        yield 'django_apscheduler'
+
+
+INSTALLED_APPS = list(_gen_installed_apps())
+
+# INSTALLED_APPS = [
+#     # 'django.contrib.admin',
+#     # 'django.contrib.auth',
+#     # 'django.contrib.contenttypes',
+#     # 'django.contrib.sessions',
+#     # 'django.contrib.messages',
+#     # 'django.contrib.staticfiles',
+#     'blackboard',
+#     'wechat',
+#     'django_apscheduler'
+# ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -121,7 +131,38 @@ USE_I18N = True
 
 USE_TZ = False
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "notice": {
+            'format': '[%(asctime)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "notice"
+        },
+        "notice_file": {
+            "level": "DEBUG" if DEBUG else "INFO",
+            "class": "logging.FileHandler",
+            "filename": os.path.join(BASE_DIR, "logs/notice.log"),
+            "formatter": "notice"
+        },
+    },
+    "loggers": {
+        "utils.scheduler": {
+            "handlers": ["console", "notice_file"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+    },
+}
+
 REST_FRAMEWORK = {
+    # 用于禁用django auth模块
     'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
@@ -153,43 +194,13 @@ APP_ID = ENV.get('APP_ID', '')
 APP_SECRET = ENV.get('APP_SECRET', '')
 TEMPLATE_ID = ENV.get('TEMPLATE_ID', '')
 
-ADMINS = [('bai', '3401797899@qq.com'), ]
-SERVER_EMAIL = ENV.get('SERVER_EMAIL', '')
-EMAIL_HOST = ENV.get('EMAIL_HOST', '')
-EMAIL_HOST_PASSWORD = ENV.get('EMAIL_PASS', '')
-EMAIL_HOST_USER = SERVER_EMAIL
-EMAIL_PORT = ENV.get('EMAIL_PORT', 465)
-EMAIL_USE_SSL = True
+REST_FRAMEWORK_EXTENSIONS = {
+    'DEFAULT_CACHE_KEY_FUNC': 'utils.funcs.key_func'
+}
 
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'filters': {
-#         'require_debug_false': {
-#             '()': 'django.utils.log.RequireDebugFalse',
-#         }
-#     },
-#     'handlers': {
-#         'mail_admins': {
-#             'level': 'ERROR',
-#             'filters': ['require_debug_false'],
-#             'class': 'django.utils.log.AdminEmailHandler'
-#         },
-#         'null': {
-#             'class': 'logging.NullHandler',
-#         },
-#         'console': {
-#             'class': 'logging.StreamHandler',
-#         },
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['console', ],
-#             'level': 'INFO',
-#         },
-#         'django.security.DisallowedHost': {
-#             'handlers': ['null'],
-#             'propagate': False,
-#         },
-#     }
-# }
+proxies = {
+    # "http": "socks5://127.0.0.1:1080",
+    # "https": "socks5://127.0.0.1:1080"
+}
+
+NOTICE_HOMEWORK_DEADLINE = ENV.get('NOTICE_HOMEWORK_DEADLINE', False)

@@ -10,9 +10,6 @@
 from functools import wraps
 
 from rest_framework.decorators import action
-import requests
-from utils.response import Response
-from utils.response_status import ResponseStatus
 
 
 def get_mapping(value: str, detail: bool = False):

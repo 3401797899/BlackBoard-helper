@@ -25,6 +25,8 @@ class ResponseStatus(Enum):
     VERIFICATION_ERROR = (40003, "session过期了")
 
     OPENID_ERROR = (40004, "OPENID获取失败")
+
+    USER_NOT_EXIST = (40004, "用户不存在")
     
     GET_HOMEWORK_STATUS_ERROR = (40005, "获取作业状态失败")
 

@@ -6,16 +6,16 @@
     3. 如果不设置 `base_url_path`, `base_url_name`, `url_pattern` 的值, 会默认使用类名的小写字母作为默认值
 """
 
+import os
+
 from pathlib import Path
-from typing import Type, Tuple, ClassVar
+from typing import Type, Tuple
 from importlib import import_module
 from inspect import getmembers, isclass
-
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from .api_view import ViewSetPlus
-import os
 
 
 def load_object(package_path: str) -> Tuple[str, object]:
