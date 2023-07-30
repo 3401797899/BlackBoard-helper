@@ -12,6 +12,7 @@ from django_apscheduler.jobstores import DjangoJobStore, register_job
 
 from BlackBoard.settings import proxies
 from utils.login import BBHelpLogin
+from .get_data import check_homework
 
 # from blackboard.models import User, Homework
 logger = logging.getLogger(__name__)
@@ -81,17 +82,13 @@ class BBHelpNotification:
             current_date = time.strftime("%Y-%m-%d", time.localtime(current_time))
             current_date_start = int(time.mktime(time.strptime(current_date, "%Y-%m-%d")))
 
-            # 判断是否还没提醒过
+            # 判断今天是否还没提醒过
             if last_notice_time < current_date_start:
                 return True
 
         if time_diff <= 24 * 60 * 60:  # 一天内
-            # 获取距离截止时间的8小时时间点
-            eight_hours_before_deadline = deadline - 8 * 60 * 60
-            # 获取距离截止时间的16小时时间点
-            sixteen_hours_before_deadline = deadline - 16 * 60 * 60
             # 判断是否需要第二次提醒
-            if last_notice_time > sixteen_hours_before_deadline or sixteen_hours_before_deadline > last_notice_time > eight_hours_before_deadline:
+            if int(round(time_diff / 3600, 0)) in [8, 16]:
                 return True
         return False
 
@@ -107,7 +104,7 @@ class BBHelpNotification:
         logger.debug(f'update {user.username}\'s course name')
         from blackboard.models import Homework
         session = BBHelpLogin(user.username, user.password).login()
-        url = 'https://wlkc.ouc.edu.cn/learn/api/public/v1/calendars/items?since=20230611&until=20230711'
+        url = 'https://wlkc.ouc.edu.cn/learn/api/public/v1/calendars/items'
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.39',
             'Cookie': session
@@ -123,8 +120,15 @@ class BBHelpNotification:
                 first_course = course_name
                 flag = True
             calendar_id = each['id']
-            Homework.objects.filter(calendar_id=calendar_id).update(course_name=course_name)
+            Homework.objects.filter(calendar_id=calendar_id).update(course_name=course_name or '个人')
         return first_course
+
+    @staticmethod
+    def check_finished(homework):
+        if homework.finished:
+            return True
+        session = BBHelpLogin(homework.user.username, homework.user.password).login()
+        return check_homework(homework.calendar_id, session)['finished']
 
     @staticmethod
     def notify():
@@ -132,16 +136,22 @@ class BBHelpNotification:
         homeworks = Homework.objects.filter(user__status=True, user__subCount__gt=0).extra(
             where=[f'cast(`deadline` as DECIMAL) >= {time.time()}']).select_related('user')
         now = time.time()
+        count = 0
         for each in homeworks:
-            course_name = each.course_name
-            if course_name == '-':
-                course_name = BBHelpNotification.update_course_name(each.user)
             if BBHelpNotification.check_reminder(float(each.last_notice_time or 0), float(each.deadline)):
-                logger.debug(f'Notice: user: {each.user.username} homework: {each.name} course: {each.course_name}')
-                access_token = WechatNotification.get_access_token()
-                if access_token:
-                    WechatNotification.send_message(each, access_token, course_name or '-')
-                    BBHelpNotification.set_notice_time_and_sub_count(each, now)
+                if not BBHelpNotification.check_finished(each):
+                    # 获取课程名称
+                    course_name = each.course_name
+                    if course_name == '-':
+                        course_name = BBHelpNotification.update_course_name(each.user)
+
+                    logger.debug(f'Notice: user: {each.user.username} homework: {each.name} course: {each.course_name}')
+                    access_token = WechatNotification.get_access_token()
+                    if access_token:
+                        WechatNotification.send_message(each, access_token, course_name or '-')
+                        BBHelpNotification.set_notice_time_and_sub_count(each, now)
+                        count += 1
+        logger.info(f"Notice {count} homeworks successfully!")
 
 
 class WechatNotification:
