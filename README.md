@@ -2,6 +2,11 @@
 
 BB平台助手API是基于Django实现的针对中国海洋大学海大云学堂（本科BB平台）的一系列API，用于OUC-SRDP项目BB平台助手。
 
+目前OUC-SRDP项目BB平台助手已经结项，OUCBlackBoard助手（简称：OUCBB助手）已上线微信小程序，累计用户数已超过1k，并将持续提供服务。欢迎扫描二维码进行体验。
+
+![17323d600637cb16b0c39837599339c](https://github.com/ITStudioOUC/BlackBoard-helper/assets/39430235/636eb035-75e2-499b-a1c6-92eb436ca02f)
+
+
 ## 接口文档
 
 ### 本程序接口文档(APIFOX)： 
