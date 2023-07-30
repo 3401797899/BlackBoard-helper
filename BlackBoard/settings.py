@@ -154,7 +154,7 @@ LOGGING = {
     },
     "loggers": {
         "utils.scheduler": {
-            "handlers": ["console", "notice_file"],
+            "handlers": ["console", "notice_file"] if DEBUG else ["notice_file"],
             "level": "DEBUG" if DEBUG else "INFO",
             "propagate": False,
         },
