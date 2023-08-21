@@ -15,6 +15,8 @@ from utils.funcs import session_status_cache
 from utils.response_status import ResponseStatus
 from utils.exception import ValidationException
 
+requests.packages.urllib3.disable_warnings()
+
 
 def check_session(func):
     @wraps(func)
@@ -52,11 +54,12 @@ class BBLogin:
         }, proxies=proxies).json()
         # 获取姓名
         # name = response['datas']['casUser']['personName']
-        if not response['code'] == 500:
+        # print(response)
+        if response['code'] == 500:
             return False
         return True
 
-    def get_session_id(self, username, password):
+    def get_bb_token(self, username, password):
         r = requests.session()
         url = 'https://id-ouc-edu-cn-s.otrust.ouc.edu.cn/sso/login?service=https://wlkc.ouc.edu.cn/webapps/bb-sso-BBLEARN/index.jsp#/'
         headers = {
@@ -65,25 +68,27 @@ class BBLogin:
         content = r.get(url, headers=headers, verify=False, proxies=proxies).text
         geolocation = re.search('<input type="hidden" name="execution" value="(.*?)"', content)
 
-        self.check_password(username, password)
-
         url = 'https://id-ouc-edu-cn-s.otrust.ouc.edu.cn/sso/login'
         t = r.post(url, headers=headers, data={
             'execution': geolocation.group(1),
             '_eventId': 'submit',
             'geolocation': '',
             'username': username,
-            'password': '11011100',  # 随机？
+            'password': '00001101',  # 随机？
             'service': 'https://wlkc.ouc.edu.cn/webapps/bb-sso-BBLEARN/index.jsp#/'
         }, verify=False, proxies=proxies)
 
         content = r.get(url='https://wlkc.ouc.edu.cn/webapps/bb-sso-BBLEARN/index.jsp', headers=headers, verify=False,
                         proxies=proxies).text
         token = re.search('<input type="hidden" value="(.*?)" name="token"/>', content).group(1)
+        return token
 
+    def get_session_id(self, username, token=None, password=None):
+        if token is None:
+            token = self.get_bb_token(username, password)
         url = 'https://wlkc.ouc.edu.cn/webapps/bb-sso-BBLEARN/execute/authValidate/customLogin'
-        r.post(url=url, data={'username': username, 'token': token}, verify=False, proxies=proxies)
-        s_session_id = r.cookies.get('s_session_id', domain='wlkc.ouc.edu.cn', path='/')
+        rep = requests.post(url=url, data={'username': username, 'token': token}, verify=False, proxies=proxies)
+        s_session_id = rep.cookies.get('s_session_id', domain='wlkc.ouc.edu.cn', path='/')
         return f's_session_id={s_session_id};'
 
     def session_expired(self, session=None):
@@ -100,13 +105,14 @@ class BBHelpLogin(BBLogin):
     def __init__(self, username, password):
         self.user = None
         self.username = username
-        # base64加密的
+        # base64加密的密码
         self.password = password
-        # 解密的
+        # 解密的密码
         try:
             self.password_decoded = base64.b64decode(password.encode('utf-8')).decode('utf-8')
         except:
             raise ValidationException(ResponseStatus.LOGIN_ERROR)
+        # 获取user
         self._get_user_by_username(username)
 
     def _get_user_by_username(self, username):
@@ -136,7 +142,11 @@ class BBHelpLogin(BBLogin):
         self.user.password = self.password
 
     def relogin(self):
-        session = self.get_session_id(self.username, self.password_decoded)
+        if not self.check_password(self.username, self.password_decoded):
+            raise ValidationException(ResponseStatus.LOGIN_ERROR)
+        if self.user.token is None:
+            self.user.token = self.get_bb_token(self.username, self.password_decoded)
+        session = self.get_session_id(self.username, token=self.user.token, password=self.password_decoded)
         if session is None:
             raise ValidationException(ResponseStatus.LOGIN_ERROR)
         if session == 's_session_id=None;':
@@ -156,5 +166,5 @@ class BBHelpLogin(BBLogin):
         return self.user.session
 
     def __del__(self):
-        if self.user:
+        if self.user and self.user.is_dirty():
             self.user.save()

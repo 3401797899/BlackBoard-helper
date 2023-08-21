@@ -1,8 +1,9 @@
 from django.db import models
+from dirtyfields import DirtyFieldsMixin
 
 
 # Create your models here.
-class User(models.Model):
+class User(DirtyFieldsMixin, models.Model):
     username = models.CharField(verbose_name='学号', max_length=100)
     password = models.CharField(verbose_name='base64加密密码', max_length=100, null=True)
     session = models.CharField(verbose_name='最后一次登录的session', max_length=150)
@@ -11,6 +12,7 @@ class User(models.Model):
     ics_id = models.CharField(verbose_name='BB平台日历ics_id', max_length=255, null=True, default=None)
     status = models.BooleanField(verbose_name='通知是否开启', default=False)
     subCount = models.IntegerField(verbose_name='剩余通知次数', default=0)
+    token = models.CharField(verbose_name='BB平台Token', max_length=255, default=None, null=True)
 
     class Meta:
         verbose_name = '用户'
