@@ -2,11 +2,18 @@
   "APP_ID": "",
   "APP_SECRET": "",
   "TEMPLATE_ID": "",
+  "SERVER_EMAIL": "",
+  "EMAIL_SMTP": "smtp.qq.com",
+  "EMAIL_PORT": 465,
+  "EMAIL_PASS": "",
   "MYSQL_NAME": "github",
   "MYSQL_HOST": "127.0.0.1",
   "MYSQL_USER": "root",
   "MYSQL_PASS": "github",
   "MYSQL_PORT": 3306,
   "SECRET_KEY": "",
-  "NOTICE_HOMEWORK_DEADLINE": false
+  "NOTICE_HOMEWORK_DEADLINE": false,
+  "REDIS_HOST": "localhost",
+  "REDIS_PORT": 6379,
+  "REDIS_DB": 0
 }

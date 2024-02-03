@@ -64,6 +64,7 @@ MIDDLEWARE = [
     # 'django.contrib.auth.middleware.AuthenticationMiddleware',
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'utils.URLVisitCount.URLVisitCountMiddleware'
 ]
 
 ROOT_URLCONF = 'BlackBoard.urls'
@@ -101,6 +102,38 @@ DATABASES = {
         'PASSWORD': ENV.get('MYSQL_PASS', ''),
     }
 }
+
+if os.getenv('GITHUB_WORKFLOW'):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        },
+        "file":{
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION":  os.path.join(BASE_DIR, "cache_response"),
+        }
+    }
+else:
+    REDIS_HOST = ENV.get('REDIS_HOST', 'localhost')
+    REDIS_PORT = ENV.get('REDIS_PORT', 6379)
+    REDIS_DB = ENV.get('REDIS_DB', 0)
+
+    CACHES = {
+        # "default": {
+        #     "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        # },
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        },
+        "file":{
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION":  os.path.join(BASE_DIR, "cache_response"),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
@@ -172,7 +205,8 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',  # application/json
         'rest_framework.parsers.FormParser',  # application/x-www-form-urlencoded
         'rest_framework.parsers.MultiPartParser',  # multipart/form-data
-    )
+    ),
+    'DEFAULT_RENDERER_CLASSES': ('rest_framework.renderers.JSONRenderer',)
 }
 
 FILE_UPLOAD_HANDLERS = [
@@ -195,7 +229,8 @@ APP_SECRET = ENV.get('APP_SECRET', '')
 TEMPLATE_ID = ENV.get('TEMPLATE_ID', '')
 
 REST_FRAMEWORK_EXTENSIONS = {
-    'DEFAULT_CACHE_KEY_FUNC': 'utils.funcs.key_func'
+    'DEFAULT_CACHE_KEY_FUNC': 'utils.funcs.key_func',
+    'DEFAULT_USE_CACHE': 'default'
 }
 
 proxies = {

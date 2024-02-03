@@ -9,7 +9,7 @@ from utils.response_status import ResponseStatus
 from utils.exception import ValidationException
 from utils.login import BBHelpLogin
 from utils.get_data import BBGetData
-from blackboard.models import User
+from blackboard.models import Notify, User
 
 
 # Create your views here.
@@ -28,6 +28,9 @@ class WechatView(ViewSetPlus):
         params = request.query_params
         username = params.get('username', '')
         pwd = params.get('password', '')
+        type = params.get('type', 'homework')
+        if type not in ['homework', 'score', 'notice']:
+            raise ValidationException(ResponseStatus.VALIDATION_ERROR)
 
         # 获取openid
         code = params.get('code', '')
@@ -37,33 +40,68 @@ class WechatView(ViewSetPlus):
         bb_login = BBHelpLogin(username, pwd)
         user = bb_login.user
         user.password = pwd
-        user.status = True
         user.open_id = open_id
-        user.ics_id = BBGetData.get_ics_id(bb_login.login())
+        if type == 'homework':
+            user.ics_id = BBGetData.get_ics_id(bb_login.login())
         user.save()
+        notice = Notify.objects.get_or_create(
+            user=user,
+            type=type,
+            defaults={
+                'user_id': user.id,
+                'type': type,
+            }
+        )
+        if not notice.open_status:
+            notice.open_status = True
+            notice.save()
+
         return Response(ResponseStatus.OK)
 
-    def _get_user_by_username(self, username):
-        if not username:
+    @get_mapping(value="close")
+    def close_notice(self, request, *args, **kwargs):
+        params = request.query_params
+        username = params.get('username', '')
+        pwd = params.get('password', '')
+        # 校验数据库
+        user = User.objects.filter(username=username, password=pwd)
+        if not user.exists():
             raise ValidationException(ResponseStatus.USER_NOT_EXIST)
-        user = User.objects.filter(username=username)
-        if user.exists():
-            return user.first()
-        else:
-            raise ValidationException(ResponseStatus.USER_NOT_EXIST)
+        type = params.get('type', '')
+        if type not in ['homework', 'score', 'notice']:
+            raise ValidationException(ResponseStatus.VALIDATION_ERROR)
+        notice = Notify.objects.filter(user__username=username, type=type, open_status=True)
+        if not notice.exists():
+            raise ValidationException(ResponseStatus.NOTICE_CLOSED_ERROR)
+        notice = notice.first()
+        notice.open_status = False
+        notice.save()
+        return Response(ResponseStatus.OK)
 
     @get_mapping(value="subcount")
     def add_subcount(self, request, *args, **kwargs):
         params = request.query_params
         username = params.get('username', '')
-        user = self._get_user_by_username(username)
-        user.subCount += 1
-        user.save()
+        type = params.get('type', 'homework')
+        if type not in ['homework', 'score', 'notice']:
+            raise ValidationException(ResponseStatus.VALIDATION_ERROR)
+        notice = Notify.objects.filter(user__username=username, type=type, open_status=True)
+        if not notice.exists():
+            raise ValidationException(ResponseStatus.NOTICE_CLOSED_ERROR)
+        notice = notice.first()
+        notice.count += 1
+        notice.save()
         return Response(ResponseStatus.OK)
 
     @get_mapping(value="getcount")
     def get_count(self, request, *args, **kwargs):
         params = request.query_params
         username = params.get('username', '')
-        count = self._get_user_by_username(username).subCount
+        type = params.get('type', 'homework')
+        if type not in ['homework', 'score', 'notice']:
+            raise ValidationException(ResponseStatus.VALIDATION_ERROR)
+        notice = Notify.objects.filter(user__username=username, type=type, open_status=True)
+        if not notice.exists():
+            raise ValidationException(ResponseStatus.NOTICE_CLOSED_ERROR)
+        count = notice.first().count
         return Response(ResponseStatus.OK, {"count": count})

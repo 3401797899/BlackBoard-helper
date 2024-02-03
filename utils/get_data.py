@@ -1,6 +1,7 @@
 import re
 import requests
 import time
+import logging
 
 from lxml import etree
 from lxml.html.clean import Cleaner
@@ -9,6 +10,7 @@ from BlackBoard.settings import proxies
 from utils.exception import ValidationException
 from utils.response_status import ResponseStatus
 
+logger = logging.getLogger("utils.scheduler")
 
 def get_class_list(cookie: str) -> dict:
     """
@@ -141,12 +143,12 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
                     }
                 ]
         t = li.find('div[@class="details"]')
-        if t:
+        if t is not None:
             text = t.find('div[@class="vtbegenerated"]')
-            if text:
+            if text is not None:
                 d['details']['text'] = etree.tostring(text, encoding='utf-8').decode('utf-8')
             file = t.find('div[@class="contextItemDetailsHeaders clearfix"]')
-            if file:
+            if file is not None:
                 if "file" not in d["details"].keys():
                     d['details']['file'] = list()
                 f = file.findall('.//ul[@class="attachments clearfix"]/li')
@@ -440,7 +442,7 @@ def check_homework(calendar_id, cookie):
         cleaner = Cleaner()
         cleaner.javascript = True
         data['description'] = cleaner.clean_html(description)
-    if e.xpath("//input[@class='submit button-1' and @name='bottom_开始']"):
+    if e.xpath("//input[@class='submit button-1' and @name='bottom_开始']") or e.xpath("//input[@class='submit button-1' and @name='bottom_继续']"):
         return data
     # 处理考试，默认没有完成
     if e.xpath("//input[@class='submit button-1' and @name='bottom_提交']"):
