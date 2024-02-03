@@ -14,7 +14,7 @@ from utils.response_status import ResponseStatus
 from utils.exception import ValidationException
 from utils.get_data import get_class_list as class_list
 
-from .models import *
+from blackboard.models import *
 
 
 class LoginView(APIViewPlus):
