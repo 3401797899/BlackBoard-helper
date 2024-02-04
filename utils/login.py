@@ -40,7 +40,7 @@ def classlist_key(*,request, **kwargs):
         return ''
     user = User.objects.filter(session=cookie)
     if not user.exists():
-        return ''
+        return cookie
     return user.first().username
 
 

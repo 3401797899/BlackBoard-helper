@@ -17,7 +17,7 @@ headers = {
 def _gen_cookie_dict(cookie: str) -> dict:
     cookies = {}
     key, value = cookie.split('=', 1)
-    cookies[key] = value
+    cookies[key] = value[:-1]
     return cookies
 
 def get_class_list(cookie: str) -> dict:
