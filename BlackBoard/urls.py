@@ -19,7 +19,8 @@ from utils.router_builder import RouterBuilder
 from BlackBoard.settings import NOTICE_HOMEWORK_DEADLINE
 
 if NOTICE_HOMEWORK_DEADLINE:
-    from utils import scheduler
+    from utils.scheduler import scheduler
+    scheduler.start()
 
 router = RouterBuilder(trailing_slash=False)
 router_slashed = RouterBuilder(trailing_slash=True)
