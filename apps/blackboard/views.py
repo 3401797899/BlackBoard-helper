@@ -27,7 +27,7 @@ class LoginView(APIViewPlus):
         username = params.get('username', '')
         pwd = params.get('password', '')
         if not all([username, pwd]):
-            raise ValidationException(ResponseStatus.VERIFICATION_ERROR)
+            raise ValidationException(ResponseStatus.LOGIN_ERROR)
         from utils.login import BBHelpLogin
         bbh_login = BBHelpLogin(username, pwd)
         return Response(ResponseStatus.OK, {'session': bbh_login.login()})
