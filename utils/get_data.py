@@ -178,8 +178,8 @@ def get_class_score(course_id: str, cookie: str) -> list:
             # 可点击的标题
             title = li.find('./div[@class="cell gradable"]/a')
             inf['title'] = title.text.strip()
-            if 'id' in title.attrib:
-                inf['column_id'] = title.attrib['id']
+            inf['column_id'] = title.attrib['id']
+            if 'id' not in title.attrib:
                 inf['title'] = li.findtext('./div[@class="cell gradable"]/span')
         elif inf['class_type'] == 'calculatedRow' or inf['class_type'] == 'upcoming_item_row':
             inf['title'] = li.findtext('./div[@class="cell gradable"]/span').strip()
