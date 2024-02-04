@@ -40,6 +40,9 @@ jobs:
           python manage.py makemigrations wechat
           python manage.py migrate
       - name: Run Tests
+        env:
+          BB_USERNAME: ${{ secrets.BB_USERNAME }}
+          BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
         run: |
           python manage.py test apps/
   

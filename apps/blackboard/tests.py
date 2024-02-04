@@ -13,8 +13,8 @@ class LoginViewTestCase(TestCase):
     def test_1_login_success(self):
         global session
         url = '/login/'
-        username = os.environ.get('secrets.BB_USERNAME')
-        password = os.environ.get('secrets.BB_PASSWORD')
+        username = os.environ.get('BB_USERNAME')
+        password = os.environ.get('BB_PASSWORD')
         data = {'username': username, 'password': password}
         response = self.client.post(url, data, format='json')
         print(response.data)
