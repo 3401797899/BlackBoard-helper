@@ -1,19 +1,23 @@
+import asyncio
 import json
+
+import aiohttp
 import icalendar
 import datetime
 import time
 import pytz
+# import grequests
 import requests
 import logging
-import asyncio
-import aiohttp
 import html
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from apscheduler.schedulers.background import BackgroundScheduler
 from django.db.models import F
 from django_apscheduler.jobstores import DjangoJobStore, register_job
 from django.core.cache import cache
+from django.db import close_old_connections
 
 from BlackBoard.settings import proxies
 from utils.login import BBHelpLogin
@@ -43,6 +47,16 @@ def add_cache_count(name, count):
     cache.set(f"{name}_count", count_1 + count, timeout=None)
 
 
+@sync_to_async
+def get_notice_user():
+    from blackboard.models import User, Notify
+    users = Notify.objects.filter(type='homework', open_status=True, count__gt=0, user__ics_id__isnull=False,
+                                  user__open_id__isnull=False).exclude(user__ics_id='guest').values_list('user',
+                                                                                                         flat=True)
+    users = User.objects.filter(pk__in=users)
+    return users
+
+
 class BBHelpNotification:
     @staticmethod
     def extract_calendar_id_from_uid(uid):
@@ -70,12 +84,8 @@ class BBHelpNotification:
         return events
 
     @staticmethod
-    def _fetch_and_insert_homework(user):
+    def _fetch_and_insert_homework(ics, user):
         from blackboard.models import Homework
-        if not user.ics_id or user.ics_id == 'guest':
-            return
-        url = f'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/{user.ics_id}/learn.ics'
-        ics = requests.get(url).content
         events = BBHelpNotification.parse_ics_data(ics)
         now = datetime.datetime.now().astimezone(pytz.timezone('Asia/Shanghai'))
         events = [e for e in events if e['dtend'] > now]
@@ -107,58 +117,29 @@ class BBHelpNotification:
         logger.debug(f'Insert or Update {user.username}\'s {count} homeworks!')
 
     @staticmethod
-    def fetch_and_insert_homework():
-        from blackboard.models import User, Notify
-        users = Notify.objects.filter(type='homework', open_status=True, count__gt=0, user__ics_id__isnull=False,
-                                      user__open_id__isnull=False).exclude(user__ics_id='guest').values_list('user',
-                                                                                                             flat=True)
-        users = User.objects.filter(pk__in=users)
-        for user in users:
-            BBHelpNotification._fetch_and_insert_homework(user)
-        logger.info(f'Insert {len(users)} users\' homeworks successfully!')
+    async def fetch_homework(session, url, user):
+        async with session.get(url.format(ics_id=user.ics_id)) as response:
+            content = await response.content.read()
+            BBHelpNotification._fetch_and_insert_homework(content, user)
 
     @staticmethod
-    async def fetch_ics_data(session, url):
-        async with session.get(url) as response:
-            return await response.read()
-
-    @staticmethod
-    async def async_fetch_and_insert_homework(user):
-
-        from blackboard.models import Homework
-        if not user.ics_id or user.ics_id == 'guest':
-            return
-        url = f'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/{user.ics_id}/learn.ics'
+    async def fetch_and_insert_homework():
+        users = await get_notice_user()
+        url = 'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/{ics_id}/learn.ics'
+        tasks = []
         async with aiohttp.ClientSession() as session:
-            ics = await BBHelpNotification.fetch_ics_data(session, url)
-        events = BBHelpNotification.parse_ics_data(ics)
-        now = datetime.datetime.now().astimezone(pytz.timezone('Asia/Shanghai'))
-        count = 0
-        for event in events:
-            if event['dtend'] > now:
-                await Homework.objects.aupdate_or_create(calendar_id=event['calendar_id'], user=user, defaults={
-                    'name': event['summary'], 'deadline': event['dtend'].timestamp(),
-                })
-                count += 1
-        add_cache_count('fetch_homework_count', count)
-        logger.debug(f'Insert or Update {user.username}\'s {count} homeworks!')
-        return ics
+            for user in users:
+                if user.ics_id and user.ics_id != 'guest':
+                    task = asyncio.create_task(BBHelpNotification.fetch_homework(session, url, user))
+                    tasks.append(task)
+            await asyncio.gather(*tasks)
+        logger.info(f'Insert {len(users)} users\' homeworks successfully!')
 
     @staticmethod
     def get_open_notice_user():
         from blackboard.models import User
         users = User.objects.filter(status=True, subCount__gt=0, ics_id__isnull=False, open_id__isnull=False)
         return users
-
-    @staticmethod
-    async def fetch_and_insert_homeworks(users):
-        logger.info('Fetch homeworks start!')
-        try:
-            async for user in users:
-                await BBHelpNotification.async_fetch_and_insert_homework(user)
-            logger.info(f'Insert homeworks successfully!')
-        except Exception as e:
-            logger.info(f"Insert homeworks error: {e}")
 
     @staticmethod
     def check_reminder(last_notice_time, deadline):
@@ -274,7 +255,7 @@ class BBHelpNotification:
                     access_token = WechatNotification.get_access_token()
                     if access_token:
                         count_now = WechatNotification.send_homework_message(each, access_token,
-                                                                          each.course_name or '-') or 0
+                                                                             each.course_name or '-') or 0
                         if count_now:
                             each.last_notice_time = now
                         count += count_now
@@ -323,7 +304,6 @@ class BBHelpNotification:
 class WechatNotification:
     @staticmethod
     def _send_message(access_token, data, type, user_id, notify):
-        from blackboard.models import Notify
         url = f"https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token={access_token}"
         try:
             r = requests.post(url, data=json.dumps(data), timeout=2).json()
@@ -430,18 +410,8 @@ class WechatNotification:
               start_date='2022-12-08 15:30:00')
 def fetchHomework():
     start = time.time()
-    from blackboard.models import Notify
-    count = Notify.objects.filter(type='homework', open_status=True, count__gt=0,
-                                  user__open_id__isnull=False, user__ics_id__isnull=False).exclude(
-        user__ics_id='guest').count()
-    from django.db import close_old_connections
     close_old_connections()
-    # from threading import Thread
-    # def run_fetch():
-    #     asyncio.run(BBHelpNotification.fetch_and_insert_homeworks(BBHelpNotification.get_open_notice_user()))
-    # thread = Thread(target=run_fetch)
-    # thread.start()
-    BBHelpNotification.fetch_and_insert_homework()
+    asyncio.run(BBHelpNotification.fetch_and_insert_homework())
     end = time.time()
     logger.info(f'Fetch {count} users\' homeworks finished! time : {end - start:.0f} s')
 
@@ -454,7 +424,6 @@ def notify():
         return
     # 防止Error:
     # (2013, 'Lost connection to MySQL server during query')
-    from django.db import close_old_connections
     close_old_connections()
 
     start_time = time.time()
