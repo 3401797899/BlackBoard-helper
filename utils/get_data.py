@@ -7,10 +7,18 @@ from lxml import etree
 from lxml.html.clean import Cleaner
 
 from BlackBoard.settings import proxies
-from utils.exception import ValidationException
-from utils.response_status import ResponseStatus
 
 logger = logging.getLogger("utils.scheduler")
+
+headers = {
+    'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36"
+}
+
+def _gen_cookie_dict(cookie: str) -> dict:
+    cookies = {}
+    key, value = cookie.split('=', 1)
+    cookies[key] = value
+    return cookies
 
 def get_class_list(cookie: str) -> dict:
     """
@@ -25,11 +33,8 @@ def get_class_list(cookie: str) -> dict:
         'tabId': '_1_1',
         'tab_tab_group_id': '_1_1'
     }
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    r = requests.post(url=url, data=data, headers=headers, proxies=proxies, verify=False)
+    cookies = _gen_cookie_dict(cookie)
+    r = requests.post(url=url, data=data, headers=headers, cookies=cookies, proxies=proxies, verify=False)
     e = etree.HTML(r.text)
     li_s = e.xpath('//li')
     data_list = []
@@ -77,11 +82,8 @@ def get_class_detail_by_id(id: str, cookie: str) -> list:
     :return: []
     """
     url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/launcher?type=Course&id=" + id + "&url="
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    r = requests.get(url, headers=headers, proxies=proxies, verify=False)
+    cookies = _gen_cookie_dict(cookie)
+    r = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False)
     r.encoding = 'utf-8'
     data = []
     e = etree.HTML(r.text)
@@ -112,11 +114,8 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
     :return: []
     """
     url = f'https://wlkc.ouc.edu.cn/webapps/blackboard/content/listContent.jsp?course_id={course_id}&content_id={content_id}'
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    t = requests.get(url, headers=headers, proxies=proxies, verify=False)
+    cookies = _gen_cookie_dict(cookie)
+    t = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False)
     cleaner = Cleaner()
     cleaner.javascript = True
     html = cleaner.clean_html(t.text)
@@ -162,11 +161,8 @@ def get_content_by_id(course_id: str, content_id: str, cookie: str) -> list:
 
 def get_class_score(course_id: str, cookie: str) -> list:
     url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    t = requests.get(url, headers=headers, proxies=proxies, verify=False)
+    cookies = _gen_cookie_dict(cookie)
+    t = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False)
     e = etree.HTML(t.text)
     data = []
     li_s = e.xpath("//div[@id='grades_wrapper']/div")
@@ -181,10 +177,9 @@ def get_class_score(course_id: str, cookie: str) -> list:
             'class_type'] == '':
             # 可点击的标题
             title = li.find('./div[@class="cell gradable"]/a')
-            try:
-                inf['title'] = title.text.strip()
+            inf['title'] = title.text.strip()
+            if 'id' in title.attrib:
                 inf['column_id'] = title.attrib['id']
-            except:
                 inf['title'] = li.findtext('./div[@class="cell gradable"]/span')
         elif inf['class_type'] == 'calculatedRow' or inf['class_type'] == 'upcoming_item_row':
             inf['title'] = li.findtext('./div[@class="cell gradable"]/span').strip()
@@ -198,11 +193,8 @@ def get_class_score(course_id: str, cookie: str) -> list:
 
 def get_announcements(cookie: str, course_id: str) -> list:
     url = "https://wlkc.ouc.edu.cn/webapps/blackboard/execute/announcement?method=search&viewChoice=2&course_id=" + course_id
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    s = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+    cookies = _gen_cookie_dict(cookie)
+    s = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
     cleaner = Cleaner()
     cleaner.javascript = True
     html = cleaner.clean_html(s)
@@ -240,11 +232,8 @@ def get_announcements(cookie: str, course_id: str) -> list:
 def submit_homework1(cookie: str, url: str, course_id, content_id, files: str = None, content: str = '',
                      name: str = None):
     try:
-        headers = {
-            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-            'Cookie': cookie
-        }
-        html = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+        cookies = _gen_cookie_dict(cookie)
+        html = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
         e = etree.HTML(html)
         nonce = e.xpath("//input[@name='blackboard.platform.security.NonceUtil.nonce']/@value")[0]
         ajaxid = e.xpath("//input[@name='blackboard.platform.security.NonceUtil.nonce.ajax']/@value")[0]
@@ -269,22 +258,19 @@ def submit_homework1(cookie: str, url: str, course_id, content_id, files: str = 
             'student_commentstype': 'H'
         }
         file = {
-            f'newFile_LocalFile0': open(files, 'rb')
+            'newFile_LocalFile0': open(files, 'rb')
         }
         r = requests.post('https://wlkc.ouc.edu.cn/webapps/assignment/uploadAssignment?action=submit', data=data,
-                          files=file, headers=headers, proxies=proxies, verify=False)
+                          files=file, headers=headers, proxies=proxies, cookies=cookies, verify=False)
         return 'destinationUrl' in r.text
     except:
         return False
 
 
 def get_detail_score(course_id: str, cookie: str) -> list:
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
+    cookies = _gen_cookie_dict(cookie)
     url = f'https://wlkc.ouc.edu.cn/webapps/bb-mygrades-BBLEARN/myGrades?course_id={course_id}&stream_name=mygrades'  # 目标网址
-    respnse = requests.get(url, headers=headers, proxies=proxies, verify=False)
+    respnse = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False)
     content = respnse.content.decode('utf8')
     html = etree.HTML(content)
     # 根据3类不同的情况，获取分数，文件，批注
@@ -301,7 +287,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             title = html.xpath('//div[@id="grades_wrapper"]//div//a[@id="' + i + '"]/text()')
             # print(title)
             url = 'https://wlkc.ouc.edu.cn' + web
-            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+            content = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
             html_g = etree.HTML(content)
             det = list()  # 列表
             subtime = html_g.xpath('//table//tr//td[2]/text()')
@@ -332,7 +318,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             # print(title)
             # print(submissiontime)
             url = 'https://wlkc.ouc.edu.cn' + web
-            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+            content = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
             html_b = etree.HTML(content)
             det = list()  # 列表
             bg = html_b.xpath('//div//tr//td[2]/text()')  # 反馈
@@ -374,7 +360,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
             # print(title)
             url = 'https://wlkc.ouc.edu.cn' + web
             # print(url)
-            content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+            content = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
             html_a = etree.HTML(content)
             det = list()  # 列表
             trytime = html_a.xpath('//span[@class="mainLabel"]/text()')
@@ -386,7 +372,7 @@ def get_detail_score(course_id: str, cookie: str) -> list:
                 newweb = html_a.xpath('//div[@id="currentAttempt_attemptList"]//a//@href')
                 for i in range(2, sum, 1):
                     url = 'https://wlkc.ouc.edu.cn' + newweb[i - 2]
-                    content = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+                    content = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
                     html_aa = etree.HTML(content)
                     # print(url)
                     background = html_aa.xpath(
@@ -414,11 +400,8 @@ def get_detail_score(course_id: str, cookie: str) -> list:
 
 def check_homework(calendar_id, cookie):
     url = f'https://wlkc.ouc.edu.cn/webapps/calendar/launch/attempt/_blackboard.platform.gradebook2.GradableItem-{calendar_id}'
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36",
-        'Cookie': cookie
-    }
-    r = requests.get(url, headers=headers, proxies=proxies, verify=False)
+    cookies = _gen_cookie_dict(cookie)
+    r = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False)
     u = r.url
     content_id = re.search('content_id=(.*?)&', u)
     course_id = re.search('course_id=(.*?)&', u)
@@ -462,12 +445,9 @@ class BBGetData:
 
     @staticmethod
     def get_ics_id(session):
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.39',
-            'Cookie': session
-        }
+        cookies = _gen_cookie_dict(session)
         url = 'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/url'
-        response = requests.get(url, headers=headers, proxies=proxies, verify=False).text
+        response = requests.get(url, headers=headers, proxies=proxies, cookies=cookies, verify=False).text
         pattern = r'calendarFeed/([^/]+)/learn.ics'
         match = re.search(pattern, response)
         if match:

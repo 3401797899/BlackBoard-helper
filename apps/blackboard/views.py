@@ -1,20 +1,21 @@
 import datetime
 import os
+import re
+import requests
 
 from rest_framework_extensions.cache.decorators import cache_response
 from django.core.cache import cache
 from django.conf import settings
 
 from utils.api_view import APIViewPlus, ViewSetPlus
-from utils.get_data import *
 from utils.login import check_session, classlist_key
 from utils.mapping import get_mapping, post_mapping
 from utils.response import Response
 from utils.response_status import ResponseStatus
 from utils.exception import ValidationException
-from utils.get_data import get_class_list as class_list
+from utils.get_data import check_homework, get_announcements, get_class_detail_by_id, get_class_list as class_list, get_class_score, get_content_by_id, submit_homework1, proxies
 
-from blackboard.models import *
+from blackboard.models import Homework, User
 
 
 class LoginView(APIViewPlus):
