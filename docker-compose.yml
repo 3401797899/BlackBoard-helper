@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/usr/django/app
+    environment:
+      - DJANGO_APP=BlackBoard
+      - GUNICORN_RELOAD=true
+      - DJANGO_MANAGEMENT_ON_START=makemigrations --noinput;migrate --noinput;
+    network_mode: host
+    restart: always
