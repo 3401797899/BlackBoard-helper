@@ -1,3 +1,9 @@
+# setup django
+import os
+import django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'BlackBoard.settings')
+django.setup()
+
 import asyncio
 import json
 
@@ -13,7 +19,7 @@ import html
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.background import BlockingScheduler
 from django.db.models import F
 from django_apscheduler.jobstores import DjangoJobStore, register_job
 from django.core.cache import cache
@@ -27,7 +33,7 @@ from utils.exception import ValidationException
 # from blackboard.models import User, Homework
 
 logger = logging.getLogger(__name__)
-scheduler = BackgroundScheduler()
+scheduler = BlockingScheduler()
 scheduler.add_jobstore(DjangoJobStore(), 'default')
 
 
@@ -437,5 +443,5 @@ def notify():
 
 # fetchHomework()
 # notify()
-# scheduler.start()
+scheduler.start()
 # BBHelpNotification.notice_notice()
