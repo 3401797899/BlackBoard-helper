@@ -11,5 +11,6 @@ services:
       - DJANGO_APP=BlackBoard
       - GUNICORN_RELOAD=true
       - DJANGO_MANAGEMENT_ON_START=makemigrations --noinput;migrate --noinput;
+      - NOTICE_HOMEWORK=true
     network_mode: host
     restart: always
