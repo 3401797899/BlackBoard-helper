@@ -29,6 +29,9 @@ if [ ${#DJANGO_MANAGEMENT_ON_START_ARRAY[@]} -ne 0 ]; then
     executeManagementCommands "${DJANGO_MANAGEMENT_ON_START_ARRAY[@]}"
 fi
 
+# scheduler
+nohup sh -c "cd /usr/django/app && python -m utils.scheduler" &
+
 # start gunicorn
 echo "starting gunicorn (PORT=${PORT}, RELOAD=${GUNICORN_RELOAD:-false}, APP=${DJANGO_APP})"
 if [ "$GUNICORN_RELOAD" == "true" ]; then
@@ -37,5 +40,3 @@ else
     gunicorn -c /etc/gunicorn/gunicorn.conf.py --bind 0.0.0.0:${PORT} --preload ${DJANGO_APP}.wsgi
 fi
 
-# scheduler
-nohup python -m utils.scheduler &

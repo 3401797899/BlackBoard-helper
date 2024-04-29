@@ -16,8 +16,6 @@ Including another URLconf
 from django.urls import path, include
 from utils.router_builder import RouterBuilder
 
-from BlackBoard.settings import NOTICE_HOMEWORK_DEADLINE
-
 router = RouterBuilder(trailing_slash=False)
 router_slashed = RouterBuilder(trailing_slash=True)
 urlpatterns = [
