@@ -119,6 +119,7 @@ else:
     REDIS_HOST = ENV.get('REDIS_HOST', 'localhost')
     REDIS_PORT = ENV.get('REDIS_PORT', 6379)
     REDIS_DB = ENV.get('REDIS_DB', 0)
+    REDIS_PWD = ENV.get('REDIS_PWD', 0)
 
     CACHES = {
         # "default": {
@@ -126,7 +127,7 @@ else:
         # },
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+            "LOCATION": f"redis://:{REDIS_PWD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
             }
