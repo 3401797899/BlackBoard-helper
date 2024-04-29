@@ -94,12 +94,14 @@ WSGI_APPLICATION = 'BlackBoard.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
+        'ENGINE': 'mysql',
+        'POOL_SIZE': 30,
         'NAME': ENV.get('MYSQL_NAME', ''),
         'HOST': ENV.get('MYSQL_HOST', '127.0.0.1'),
         'PORT': ENV.get('MYSQL_PORT', 3306),
         'USER': ENV.get('MYSQL_USER', ''),
         'PASSWORD': ENV.get('MYSQL_PASS', ''),
+        'CONN_MAX_AGE': 28790
     }
 }
 

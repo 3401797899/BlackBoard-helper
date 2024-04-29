@@ -2,8 +2,17 @@
 import os
 import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'BlackBoard.settings')
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 
+# setup logging
+import logging
+from django.conf import settings
+logging.basicConfig(filename=settings.BASE_DIR / 'logs' / 'notice.log',
+                    level=logging.INFO,
+                    format='[%(asctime)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
+                    )
 import asyncio
 import json
 
@@ -14,7 +23,6 @@ import time
 import pytz
 # import grequests
 import requests
-import logging
 import html
 
 from asgiref.sync import sync_to_async
@@ -52,8 +60,6 @@ def add_cache_count(name, count):
     count_1 = cache.get_or_set(f"{name}_count", 0, timeout=None)
     cache.set(f"{name}_count", count_1 + count, timeout=None)
 
-
-@sync_to_async
 def get_notice_user():
     from blackboard.models import User, Notify
     users = Notify.objects.filter(type='homework', open_status=True, count__gt=0, user__ics_id__isnull=False,
@@ -130,10 +136,11 @@ class BBHelpNotification:
 
     @staticmethod
     async def fetch_and_insert_homework():
-        users = await get_notice_user()
+        users = get_notice_user()
         url = 'https://wlkc.ouc.edu.cn/webapps/calendar/calendarFeed/{ics_id}/learn.ics'
         tasks = []
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(force_close=True)
+        async with aiohttp.ClientSession(connector=connector) as session:
             for user in users:
                 if user.ics_id and user.ics_id != 'guest':
                     task = asyncio.create_task(BBHelpNotification.fetch_homework(session, url, user))
@@ -416,10 +423,9 @@ class WechatNotification:
               start_date='2022-12-08 15:30:00')
 def fetchHomework():
     start = time.time()
-    close_old_connections()
     asyncio.run(BBHelpNotification.fetch_and_insert_homework())
     end = time.time()
-    logger.info(f'Fetch {count} users\' homeworks finished! time : {end - start:.0f} s')
+    logger.info(f'Fetch homeworks finished! time : {end - start:.0f} s')
 
 
 @register_job(scheduler, 'interval', hours=1, id='noticeUser', replace_existing=True, start_date='2022-12-08 16:00:00',
@@ -428,18 +434,10 @@ def notify():
     hour = datetime.datetime.now().hour
     if 1 <= hour <= 5:
         return
-    # 防止Error:
-    # (2013, 'Lost connection to MySQL server during query')
-    close_old_connections()
-
     start_time = time.time()
     BBHelpNotification.notify()
     end_time = time.time()
     logger.info(f"提醒任务结束，耗时：{end_time - start_time:.0f}s")
-
-
-# 注册事件
-
 
 # fetchHomework()
 # notify()
